@@ -1,8 +1,38 @@
 .DS_Store
+*.xcuserstate
+*.xcscmblueprint
+*.xcresult
+
+# Swift Package Manager
 /.build
 /Packages
+/.swiftpm/
+
+# Xcode local state
 xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
 DerivedData/
-.swiftpm/configuration/registries.json
-.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+
+# Local operator notes. These are intentionally not part of the public repo.
+/.local-notes/
+CLAUDE.local.md
+
+# Local credentials and environment
+.env
+.env.*
 .netrc
+*.key
+*.pem
+*.p8
+*.p12
+*.cer
+*.mobileprovision
+
+# Local data, logs, and crash artifacts
+*.sqlite
+*.sqlite3
+*.db
+*.log
+*.ips
+*.crash
