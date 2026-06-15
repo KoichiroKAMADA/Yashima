@@ -60,7 +60,7 @@ The cache identity, memory store, storage store, core engine, codec-based `YCach
 
 ## Requirements
 
-- Swift 6.3 or later
+- Swift 6.1 or later
 - iOS 17+
 - macOS 14+
 
