@@ -122,11 +122,10 @@ import CoreGraphics
 @Test func imageConveniencesRoundTripAndUseCodecIdentity() async throws {
     try await withStandardYCache { cache, rootDirectory in
         let key = standardKey("image-default-jpeg")
-        let image = makeStandardTestImage(width: 3, height: 2)
         let defaultJPEG = ImageCodec.jpeg()
 
         let generated = try await cache.jpeg(for: key) {
-            image
+            makeStandardTestImage(width: 3, height: 2)
         }
         let resolved = try await cache.resolve(for: key, codec: defaultJPEG) {
             throw StandardConvenienceTestError.unexpectedGenerator
