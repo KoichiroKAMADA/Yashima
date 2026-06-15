@@ -77,9 +77,9 @@ private extension CodableCodec.Format {
 #if canImport(UIKit) || canImport(AppKit)
 public struct ImageCodec: CacheCodec, Equatable {
     #if canImport(UIKit)
-    public typealias Value = UIImage
+    public typealias PlatformImage = UIImage
     #elseif canImport(AppKit)
-    public typealias Value = NSImage
+    public typealias PlatformImage = NSImage
     #endif
 
     public static let defaultJPEGQuality = 0.85
@@ -115,9 +115,9 @@ public struct ImageCodec: CacheCodec, Equatable {
     public func encode(_ value: Value) throws -> Data {
         switch format {
         case .png:
-            return try encodePNG(value)
+            return try encodePNG(value.image)
         case .jpeg(let quality):
-            return try encodeJPEG(value, quality: quality)
+            return try encodeJPEG(value.image, quality: quality)
         }
     }
 
@@ -126,17 +126,25 @@ public struct ImageCodec: CacheCodec, Equatable {
         guard let image = UIImage(data: data) else {
             throw Error.decodingFailed(format: format.name)
         }
-        return image
+        return Value(image)
         #elseif canImport(AppKit)
         guard let image = NSImage(data: data) else {
             throw Error.decodingFailed(format: format.name)
         }
-        return image
+        return Value(image)
         #endif
     }
 }
 
 extension ImageCodec {
+    public struct Value: @unchecked Sendable {
+        public let image: PlatformImage
+
+        public init(_ image: PlatformImage) {
+            self.image = image
+        }
+    }
+
     public enum Format: Sendable, Equatable {
         case png
         case jpeg(quality: Double)

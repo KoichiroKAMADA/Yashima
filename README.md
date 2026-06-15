@@ -30,7 +30,7 @@ The public face should stay simple. Internally, standard conveniences are thin w
 
 `YCache` is the root type. The `Y` comes from Yashima; supporting vocabulary stays descriptive with names like `CacheKey` and `CacheCodec`.
 
-Image conveniences cache platform images as explicit PNG or JPEG data. On iOS they use `UIImage`; on macOS they use `NSImage`. The default JPEG quality is `0.85`.
+Image conveniences cache platform images as explicit PNG or JPEG data. On iOS they accept and return `UIImage`; on macOS they accept and return `NSImage`. The codec stores platform images through a small Sendable wrapper when used directly. The default JPEG quality is `0.85`.
 
 The codec-based core API is available first:
 
@@ -61,8 +61,8 @@ The cache identity, memory store, storage store, core engine, codec-based `YCach
 ## Requirements
 
 - Swift 6.1 or later
-- iOS 17+
-- macOS 14+
+- iOS 16+
+- macOS 13+
 
 ## Contributing
 

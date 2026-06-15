@@ -210,7 +210,7 @@ private func standardKey(_ name: String) -> CacheKey {
 }
 
 #if canImport(UIKit) || canImport(AppKit)
-private func makeStandardTestImage(width: Int, height: Int) -> ImageCodec.Value {
+private func makeStandardTestImage(width: Int, height: Int) -> ImageCodec.PlatformImage {
     let bytesPerPixel = 4
     let bytesPerRow = width * bytesPerPixel
     let pixels = (0..<(width * height)).flatMap { index -> [UInt8] in
@@ -244,10 +244,14 @@ private func makeStandardTestImage(width: Int, height: Int) -> ImageCodec.Value 
     #endif
 }
 
-private func imageSize(_ image: ImageCodec.Value) -> StandardImageSize {
+private func imageSize(_ image: ImageCodec.PlatformImage) -> StandardImageSize {
     StandardImageSize(
         width: Int(image.size.width.rounded()),
         height: Int(image.size.height.rounded())
     )
+}
+
+private func imageSize(_ value: ImageCodec.Value) -> StandardImageSize {
+    imageSize(value.image)
 }
 #endif

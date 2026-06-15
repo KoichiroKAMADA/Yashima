@@ -30,7 +30,7 @@ This file tracks the intended public surface before implementation. Keep it smal
 - `ImageCodec.Format`
 - `ImageCodec.Error`
 
-`ImageCodec` is available on Apple platforms with image frameworks. It maps to `UIImage` when UIKit is available and `NSImage` when AppKit is available.
+`ImageCodec` is available on Apple platforms with image frameworks. The `jpeg` and `png` convenience APIs accept and return `UIImage` when UIKit is available and `NSImage` when AppKit is available. Direct codec usage stores platform images through `ImageCodec.Value`, a small Sendable wrapper around the platform image.
 
 ## Standard Convenience
 
