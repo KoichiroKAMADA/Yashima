@@ -1,5 +1,9 @@
 # Yashima
 
+<p align="center">
+  <img src="Documentation/Assets/yashima-hero.png" alt="Yashima" width="840">
+</p>
+
 A Swift Concurrency-first get-or-generate cache for locally generated app artifacts.
 
 Not an image downloader. Not a database.
