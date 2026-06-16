@@ -24,3 +24,13 @@ jobs:
 
       - name: Run tests
         run: swift test
+
+      - name: Build example app
+        run: |
+          xcodebuild \
+            -project Examples/YashimaPreviewLab/YashimaPreviewLab.xcodeproj \
+            -scheme YashimaPreviewLab \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath /tmp/YashimaPreviewLabDerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build
