@@ -45,6 +45,22 @@ let report = try await reports.value(for: key) {
 let immediate = try await reports.peek(for: key)
 ```
 
+## Example App
+
+An iOS sample app is available in
+[`Examples/YashimaPreviewLab`](Examples/YashimaPreviewLab).
+
+It generates three kinds of in-app preview artifacts, caches the generated
+JPEGs, and benchmarks generation, memory hits, and storage hits side by side:
+
+- A MapKit route snapshot based on a full 9,653-point GPX-style cycling route
+  from Goshikidai to Yashima.
+- A Swift Charts performance snapshot.
+- A SwiftUI ticket-style manifest rendered with `ImageRenderer`.
+
+The sample is designed to demonstrate Yashima as a cache for expensive
+app-generated artifacts, not as a map-specific engine or a web image downloader.
+
 ## Status
 
 The cache identity, memory store, storage store, core engine, codec-based `YCache` public API, standard codecs, and README-first convenience helpers are implemented with Swift Testing coverage.
