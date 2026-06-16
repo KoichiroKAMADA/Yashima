@@ -61,6 +61,30 @@ actor CacheCoreEngine {
         )
     }
 
+    func metadata<C: CacheCodec>(
+        for key: CacheKey,
+        codec: C
+    ) async throws -> CacheCoreMetadata? {
+        let identity = CacheEntryIdentity(key: key, codec: codec)
+        if let metadata = await memory.peekMetadata(for: identity) {
+            return metadata
+        }
+
+        return try await Self.metadataFromStorage(identity: identity, storage: storage)
+    }
+
+    func contains<C: CacheCodec>(
+        for key: CacheKey,
+        codec: C
+    ) async throws -> Bool {
+        let identity = CacheEntryIdentity(key: key, codec: codec)
+        if await memory.containsValue(for: identity) {
+            return true
+        }
+
+        return try await Self.metadataFromStorage(identity: identity, storage: storage) != nil
+    }
+
     @discardableResult
     func store<C: CacheCodec>(
         _ value: C.Value,
@@ -79,21 +103,57 @@ actor CacheCoreEngine {
             now: now
         )
     }
+
+    @discardableResult
+    func remove<C: CacheCodec>(
+        for key: CacheKey,
+        codec: C
+    ) async throws -> Bool {
+        let identity = CacheEntryIdentity(key: key, codec: codec)
+        let removedFromMemory = await memory.removeValue(for: identity)
+        let removedFromStorage = try await storage.removeValue(for: identity)
+        return removedFromMemory || removedFromStorage
+    }
+
+    func removeAll() async throws {
+        await memory.removeAll()
+        try await storage.removeAll()
+    }
+
+    func removeAll(in namespace: String) async throws {
+        await memory.removeAll(in: namespace)
+        try await storage.removeAll(in: namespace)
+    }
+
+    func storageUsage() async throws -> CacheCoreStorageUsage {
+        CacheCoreStorageUsage(try await storage.usage())
+    }
+
+    @discardableResult
+    func trimStorageIfNeeded() async throws -> CacheCoreStorageUsage {
+        CacheCoreStorageUsage(try await storage.trimIfNeeded())
+    }
 }
 
 struct CacheCoreOptions: Sendable, Equatable {
     var cost: CacheCost?
     var lookupPolicy: CacheLookupPolicy
     var writePolicy: CacheWritePolicy
+    var readFailurePolicy: CacheReadFailurePolicy
+    var writeFailurePolicy: CacheWriteFailurePolicy
 
     init(
         cost: CacheCost? = nil,
         lookupPolicy: CacheLookupPolicy = .normal,
-        writePolicy: CacheWritePolicy = .memoryAndStorage
+        writePolicy: CacheWritePolicy = .memoryAndStorage,
+        readFailurePolicy: CacheReadFailurePolicy = .treatAsMiss,
+        writeFailurePolicy: CacheWriteFailurePolicy = .throwError
     ) {
         self.cost = cost
         self.lookupPolicy = lookupPolicy
         self.writePolicy = writePolicy
+        self.readFailurePolicy = readFailurePolicy
+        self.writeFailurePolicy = writeFailurePolicy
     }
 
     static let `default` = CacheCoreOptions()
@@ -109,6 +169,16 @@ public enum CacheWritePolicy: Sendable, Equatable {
     case memoryAndStorage
     case memoryOnly
     case disabled
+}
+
+public enum CacheReadFailurePolicy: Sendable, Equatable {
+    case throwError
+    case treatAsMiss
+}
+
+public enum CacheWriteFailurePolicy: Sendable, Equatable {
+    case throwError
+    case bestEffort
 }
 
 public enum CacheCost: Sendable, Equatable {
@@ -158,14 +228,36 @@ struct CacheCoreResolved<Value: Sendable>: Sendable {
     var wasSharedGeneration: Bool
 }
 
+struct CacheCoreStorageUsage: Sendable, Equatable {
+    var byteCount: Int
+    var entryCount: Int
+    var maximumByteCount: Int?
+
+    init(_ usage: StorageCacheUsage) {
+        self.byteCount = usage.byteCount
+        self.entryCount = usage.entryCount
+        self.maximumByteCount = usage.maximumByteCount
+    }
+}
+
 enum CacheCoreError: Error, Equatable {
     case cacheMiss
     case valueTypeMismatch
 }
 
+protocol CacheCoreMemoryMetadataProviding: Sendable {
+    var cacheCoreMetadata: CacheCoreMetadata { get }
+}
+
 private struct CacheCoreMemoryEntry<Value: Sendable>: Sendable {
     var value: Value
     var metadata: CacheCoreMetadata
+}
+
+extension CacheCoreMemoryEntry: CacheCoreMemoryMetadataProviding {
+    var cacheCoreMetadata: CacheCoreMetadata {
+        metadata
+    }
 }
 
 private struct AnyCacheCoreResolved: Sendable {
@@ -270,6 +362,23 @@ private extension CacheCoreEngine {
         return nil
     }
 
+    static func metadataFromStorage(
+        identity: CacheEntryIdentity,
+        storage: StorageCacheStore
+    ) async throws -> CacheCoreMetadata? {
+        do {
+            guard let metadata = try await storage.metadata(for: identity) else {
+                return nil
+            }
+            return CacheCoreMetadata(metadata)
+        } catch {
+            if isRecoverableStorageReadFailure(error) {
+                return nil
+            }
+            throw error
+        }
+    }
+
     static func resolveFromStorage<C: CacheCodec>(
         identity: CacheEntryIdentity,
         codec: C,
@@ -277,11 +386,31 @@ private extension CacheCoreEngine {
         memory: MemoryCacheStore,
         storage: StorageCacheStore
     ) async throws -> CacheCoreResolved<C.Value>? {
-        guard let stored = try await storage.loadData(for: identity) else {
-            return nil
+        let stored: StoredCacheEntry
+        do {
+            guard let loaded = try await storage.loadData(for: identity) else {
+                return nil
+            }
+            stored = loaded
+        } catch {
+            if options.readFailurePolicy.treatsReadFailureAsMiss,
+               isRecoverableStorageReadFailure(error) {
+                return nil
+            }
+            throw error
         }
 
-        let value = try codec.decode(stored.data)
+        let value: C.Value
+        do {
+            value = try codec.decode(stored.data)
+        } catch {
+            _ = try? await storage.removeValue(for: identity)
+            if options.readFailurePolicy.treatsReadFailureAsMiss {
+                return nil
+            }
+            throw error
+        }
+
         let metadata = CacheCoreMetadata(stored.metadata)
         if options.writePolicy.writesMemory {
             await memory.put(
@@ -316,12 +445,24 @@ private extension CacheCoreEngine {
 
         let metadata: CacheCoreMetadata?
         if options.writePolicy.writesStorage, let encodedData {
-            let storedMetadata = try await storage.store(
-                encodedData,
-                for: identity,
-                cost: options.cost?.value
-            )
-            metadata = CacheCoreMetadata(storedMetadata)
+            do {
+                let storedMetadata = try await storage.store(
+                    encodedData,
+                    for: identity,
+                    cost: options.cost?.value
+                )
+                metadata = CacheCoreMetadata(storedMetadata)
+            } catch {
+                guard options.writeFailurePolicy.allowsBestEffortStorageFailure else {
+                    throw error
+                }
+                metadata = CacheCoreMetadata(
+                    identity: identity,
+                    byteCount: encodedData.count,
+                    cost: options.cost?.value,
+                    date: now()
+                )
+            }
         } else if let encodedData {
             metadata = CacheCoreMetadata(
                 identity: identity,
@@ -359,6 +500,10 @@ private extension CacheCoreEngine {
         }
 
         return try codec.encode(value)
+    }
+
+    static func isRecoverableStorageReadFailure(_ error: any Error) -> Bool {
+        error is StorageCacheStoreError || error is DecodingError
     }
 }
 
@@ -407,6 +552,28 @@ private extension CacheWritePolicy {
             true
         case .memoryOnly, .disabled:
             false
+        }
+    }
+}
+
+private extension CacheReadFailurePolicy {
+    var treatsReadFailureAsMiss: Bool {
+        switch self {
+        case .throwError:
+            false
+        case .treatAsMiss:
+            true
+        }
+    }
+}
+
+private extension CacheWriteFailurePolicy {
+    var allowsBestEffortStorageFailure: Bool {
+        switch self {
+        case .throwError:
+            false
+        case .bestEffort:
+            true
         }
     }
 }

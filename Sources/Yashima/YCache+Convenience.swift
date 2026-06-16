@@ -48,6 +48,26 @@ extension YCache {
         return value.image
     }
 
+    public func optionalJPEG(
+        for key: CacheKey,
+        quality: Double = ImageCodec.defaultJPEGQuality,
+        options: Options = .default,
+        _ generator: @escaping @Sendable () async throws -> ImageCodec.PlatformImage?
+    ) async throws -> ImageCodec.PlatformImage? {
+        let value = try await optionalValue(
+            for: key,
+            codec: ImageCodec.jpeg(quality: quality),
+            options: options,
+            {
+                guard let image = try await generator() else {
+                    return nil
+                }
+                return ImageCodec.Value(image)
+            }
+        )
+        return value?.image
+    }
+
     public func png(
         for key: CacheKey,
         options: Options = .default,
@@ -62,6 +82,25 @@ extension YCache {
             }
         )
         return value.image
+    }
+
+    public func optionalPNG(
+        for key: CacheKey,
+        options: Options = .default,
+        _ generator: @escaping @Sendable () async throws -> ImageCodec.PlatformImage?
+    ) async throws -> ImageCodec.PlatformImage? {
+        let value = try await optionalValue(
+            for: key,
+            codec: ImageCodec.png,
+            options: options,
+            {
+                guard let image = try await generator() else {
+                    return nil
+                }
+                return ImageCodec.Value(image)
+            }
+        )
+        return value?.image
     }
 }
 #endif

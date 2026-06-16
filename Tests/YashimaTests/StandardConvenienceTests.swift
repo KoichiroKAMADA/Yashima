@@ -172,6 +172,31 @@ import CoreGraphics
         #expect(imageSize(pngResolved.value) == .init(width: 4, height: 3))
     }
 }
+
+@Test func optionalImageConveniencesOnlyCacheNonNilImages() async throws {
+    try await withStandardYCache { cache, _ in
+        let nilKey = standardKey("optional-jpeg-nil")
+        let imageKey = standardKey("optional-png-image")
+
+        let nilImage = try await cache.optionalJPEG(for: nilKey) {
+            nil
+        }
+        let nilCached = try await cache.valueIfCached(for: nilKey, codec: ImageCodec.jpeg())
+
+        let pngImage = try await cache.optionalPNG(for: imageKey) {
+            makeStandardTestImage(width: 5, height: 4)
+        }
+        let pngResolved = try await cache.resolve(for: imageKey, codec: ImageCodec.png) {
+            throw StandardConvenienceTestError.unexpectedGenerator
+        }
+
+        #expect(nilImage == nil)
+        #expect(nilCached == nil)
+        #expect(imageSize(pngImage!) == .init(width: 5, height: 4))
+        #expect(imageSize(pngResolved.value) == .init(width: 5, height: 4))
+        #expect(pngResolved.metadata?.codecIdentifier == ImageCodec.png.identifier)
+    }
+}
 #endif
 
 private struct StandardSummary: Codable, Sendable, Equatable {

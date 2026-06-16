@@ -11,12 +11,15 @@ This file tracks the intended public surface before implementation. Keep it smal
 - `YCache.Resolved<Value>`
 - `YCache.Source`
 - `YCache.Metadata`
+- `YCache.StorageUsage`
 - `YCache.Error`
 - `CacheKey`
 - `CacheKeyComponent`
 - `CacheCodec`
 - `CacheLookupPolicy`
 - `CacheWritePolicy`
+- `CacheReadFailurePolicy`
+- `CacheWriteFailurePolicy`
 - `CacheCost`
 
 `Y` is reserved for the root type `YCache`. Do not introduce `YKey`, `YCodec`, or other prefixed vocabulary types.
@@ -38,7 +41,9 @@ These APIs are intended to be the first touch points in README examples.
 
 - `jpeg(for:_:)`
 - `jpeg(for:quality:_:)`
+- `optionalJPEG(for:quality:_:)`
 - `png(for:_:)`
+- `optionalPNG(for:_:)`
 - `data(for:_:)`
 - `codable(for:_:)`
 - `codable(for:format:_:)`
@@ -63,9 +68,46 @@ Default standard identities:
 - `refresh(for:codec:options:_:)`
 - `optionalValue(for:codec:options:_:)`
 - `peek(for:codec:) async throws`
+- `metadata(for:codec:) async throws`
+- `contains(for:codec:) async throws`
 - `putInMemory(_:for:codec:) async throws`
 - `store(_:for:codec:options:) async throws`
+- `remove(for:codec:) async throws -> Bool`
+- `removeAll() async throws`
+- `removeAll(in:) async throws`
+- `storageUsage() async throws -> YCache.StorageUsage`
+- `trimStorageIfNeeded() async throws -> YCache.StorageUsage`
 - `using(_:)`
+
+`metadata(for:codec:)` and `contains(for:codec:)` do not decode the stored
+payload. They validate the cache identity and the presence of the stored data
+file, but they do not guarantee that a later decode or content digest check will
+succeed. These lookup APIs may clean up invalid metadata or missing data files.
+
+`removeAll(in:)` removes entries whose `CacheKey.namespace` matches the supplied
+namespace. More expressive tag or predicate invalidation is intentionally not in
+the initial public surface.
+
+`YCache.Configuration.storageMaximumByteCount` enables storage trimming. When the
+limit is set, storage writes trim entries by least recent storage access. Storage
+hits update `lastAccessedAt`. `storageUsage()` and storage trimming are based on
+stored metadata and may clean up invalid metadata, missing data files, and
+orphaned data files. They do not read and hash every stored payload; content
+digest mismatches are detected on read.
+
+`YCache.Options` includes:
+
+- `readFailurePolicy`, default `.treatAsMiss`
+- `writeFailurePolicy`, default `.throwError`
+
+`.treatAsMiss` is intended for disposable generated artifacts. Use `.throwError`
+when a caller needs strict cache corruption or decode failure reporting. It is
+limited to recoverable cache read failures such as corrupt cache metadata,
+missing cache data, content digest mismatches, and decode failures.
+
+`CacheWriteFailurePolicy.bestEffort` treats storage write failure as a
+memory-only fallback when memory writes are enabled. Generator failures, encode
+failures, and read failures are not part of this policy.
 
 ## Typed Facade
 
@@ -77,8 +119,11 @@ Default standard identities:
 - `refresh(for:options:_:)`
 - `optionalValue(for:options:_:)`
 - `peek(for:) async throws`
+- `metadata(for:) async throws`
+- `contains(for:) async throws`
 - `putInMemory(_:for:) async throws`
 - `store(_:for:options:) async throws`
+- `remove(for:) async throws -> Bool`
 
 The initial implementation keeps memory access behind actors, so `peek` and `putInMemory` are async in v0.1. A future synchronous memory-only helper should be added only if the memory layer is explicitly designed for that guarantee.
 
@@ -86,8 +131,8 @@ The initial implementation keeps memory access behind actors, so `peek` and `put
 
 - `image(for:)` with an implicit image format
 - `imageIfCached`
+- Implicit `optionalImage`
 - `refreshImage`
-- `optionalImage`
 - `peekImage`
 - `putImageInMemory`
 - `image(for:format:)`
@@ -96,8 +141,8 @@ The initial implementation keeps memory access behind actors, so `peek` and `put
 - Sync disk write completion guarantee
 - Sync memory-only `peek`
 - Sync memory-only `putInMemory`
-- Public corruption policy override
 - Public stale/freshness policy
 - Public tag invalidation
+- Public predicate invalidation
 - URL loading
 - UI components

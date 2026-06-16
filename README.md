@@ -1,7 +1,3 @@
-<p align="right">
-  <strong>English</strong> | <a href="README.ja.md">日本語</a>
-</p>
-
 # Yashima
 
 <p align="center">
@@ -17,7 +13,10 @@ Yashima is being designed for expensive local results that are safe to regenerat
 ## Basic Usage
 
 ```swift
-let cache = YCache(storageDirectory: cacheDirectory)
+let cache = YCache(
+    storageDirectory: cacheDirectory,
+    storageMaximumByteCount: 200 * 1024 * 1024
+)
 
 let thumbnails = cache.using(ImageCodec.jpeg(quality: 0.85))
 
@@ -49,25 +48,52 @@ let report = try await reports.value(for: key) {
 let immediate = try await reports.peek(for: key)
 ```
 
+## Cache Lifecycle
+
+Yashima caches values that are safe to regenerate, so cache lifecycle operations
+are explicit and small:
+
+```swift
+let metadata = try await cache.metadata(for: key, codec: ImageCodec.jpeg())
+let isCached = try await cache.contains(for: key, codec: ImageCodec.jpeg())
+
+try await cache.remove(for: key, codec: ImageCodec.jpeg())
+try await cache.removeAll(in: "thumbnails")
+
+let usage = try await cache.storageUsage()
+try await cache.trimStorageIfNeeded()
+```
+
+Storage entries are trimmed by least-recently-used metadata when
+`storageMaximumByteCount` is configured. Storage hits update their access time.
+Use `CacheKey.variant(_:_:)` and `CacheKey.version(_:_:)` to describe the inputs
+that make a generated artifact unique; Yashima hashes the canonical key and codec
+identity internally.
+
+`metadata(for:codec:)` and `contains(for:codec:)` are lightweight lookups. They
+do not decode the payload or prove that a later content digest check will
+succeed. `storageUsage()` is based on stored metadata and may clean up invalid
+metadata or missing data files, but it does not read and hash every payload.
+
+The default read failure policy treats corrupt cache files as misses so callers
+can regenerate disposable artifacts. Use `readFailurePolicy: .throwError` when a
+caller needs strict error propagation. For writes,
+`writeFailurePolicy: .bestEffort` returns the generated value and falls back to
+memory-only caching if storage persistence fails.
+
 ## Example App
 
 An iOS sample app is available in
 [`Examples/YashimaPreviewLab`](Examples/YashimaPreviewLab).
 
-It generates three kinds of in-app preview artifacts, caches the generated
-JPEGs, and benchmarks generation, memory hits, and storage hits side by side:
-
-- A MapKit route snapshot based on a sanitized 9,426-point coordinate route
-  from Goshikidai to Yashima.
-- A Swift Charts performance snapshot.
-- A SwiftUI ticket-style manifest rendered with `ImageRenderer`.
-
-The sample is designed to demonstrate Yashima as a cache for expensive
-app-generated artifacts, not as a map-specific engine or a web image downloader.
+It generates preview artwork inside the app, caches the generated result, and
+shows whether each read came from generation, memory, or storage. The sample is
+designed to demonstrate Yashima as a cache for locally generated app artifacts,
+not as a web image downloader.
 
 ## Status
 
-The cache identity, memory store, storage store, core engine, codec-based `YCache` public API, standard codecs, and README-first convenience helpers are implemented with Swift Testing coverage.
+The cache identity, memory store, storage store, core engine, codec-based `YCache` public API, standard codecs, lifecycle APIs, storage trimming, failure policies, and README-first convenience helpers are implemented with Swift Testing coverage.
 
 ## Design Notes
 
@@ -76,6 +102,7 @@ The cache identity, memory store, storage store, core engine, codec-based `YCach
 - Get-or-generate as the primary usage model.
 - Data-first storage with typed codecs.
 - `CacheKey` + codec identifier as the effective cache entry identity.
+- Explicit invalidation, storage usage, and quota-based storage trimming.
 - Cache semantics: values may disappear, but values returned by the cache must match their key, codec, and metadata.
 
 ## Requirements
