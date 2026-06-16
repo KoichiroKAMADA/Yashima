@@ -163,6 +163,198 @@ import Yashima
     }
 }
 
+@Test func yCacheRemoveDeletesMemoryAndStorageEntry() async throws {
+    try await withYCache { cache, rootDirectory in
+        let key = yCacheKey("remove")
+        let codec = PublicUTF8StringCodec()
+
+        try await cache.store("stored", for: key, codec: codec)
+
+        let firstRemoval = try await cache.remove(for: key, codec: codec)
+        let secondRemoval = try await cache.remove(for: key, codec: codec)
+        let memoryMiss = try await cache.peek(for: key, codec: codec)
+        let storageMiss = try await YCache(storageDirectory: rootDirectory)
+            .valueIfCached(for: key, codec: codec)
+
+        #expect(firstRemoval)
+        #expect(!secondRemoval)
+        #expect(memoryMiss == nil)
+        #expect(storageMiss == nil)
+    }
+}
+
+@Test func yCacheRemoveAllDeletesEveryEntryPreservesUnmanagedFilesAndAllowsRegeneration() async throws {
+    try await withYCache { cache, rootDirectory in
+        let codec = PublicUTF8StringCodec()
+        let first = yCacheKey("remove-all-first")
+        let second = yCacheKey("remove-all-second")
+        let unmanagedFile = rootDirectory.appendingPathComponent("unmanaged.txt")
+
+        try FileManager.default.createDirectory(
+            at: rootDirectory,
+            withIntermediateDirectories: true
+        )
+        try Data("keep".utf8).write(to: unmanagedFile)
+        try await cache.store("first", for: first, codec: codec)
+        try await cache.store("second", for: second, codec: codec)
+        try await cache.removeAll()
+
+        let firstMiss = try await cache.valueIfCached(for: first, codec: codec)
+        let secondMiss = try await cache.valueIfCached(for: second, codec: codec)
+        let regenerated = try await cache.value(for: first, codec: codec) {
+            "regenerated"
+        }
+
+        #expect(firstMiss == nil)
+        #expect(secondMiss == nil)
+        #expect(regenerated == "regenerated")
+        #expect(FileManager.default.fileExists(atPath: unmanagedFile.path))
+    }
+}
+
+@Test func yCacheRemoveAllInNamespaceOnlyDeletesMatchingNamespace() async throws {
+    try await withYCache { cache, rootDirectory in
+        let codec = PublicUTF8StringCodec()
+        let keptKey = CacheKey(namespace: "kept-namespace", identity: "value")
+        let removedKey = CacheKey(namespace: "removed-namespace", identity: "value")
+
+        try await cache.store("kept", for: keptKey, codec: codec)
+        try await cache.store("removed", for: removedKey, codec: codec)
+        try await cache.removeAll(in: "removed-namespace")
+
+        let sameCacheRemoved = try await cache.valueIfCached(for: removedKey, codec: codec)
+        let sameCacheKept = try await cache.valueIfCached(for: keptKey, codec: codec)
+        let newCache = YCache(storageDirectory: rootDirectory)
+        let storageRemoved = try await newCache.valueIfCached(for: removedKey, codec: codec)
+        let storageKept = try await newCache.valueIfCached(for: keptKey, codec: codec)
+
+        #expect(sameCacheRemoved == nil)
+        #expect(sameCacheKept == "kept")
+        #expect(storageRemoved == nil)
+        #expect(storageKept == "kept")
+    }
+}
+
+@Test func yCacheContainsAndMetadataDoNotDecodePayload() async throws {
+    try await withYCache { cache, rootDirectory in
+        let key = yCacheKey("metadata-with-throwing-decode")
+        let codec = PublicThrowingDecodeStringCodec()
+
+        try await cache.store("stored", for: key, codec: codec)
+
+        let newCache = YCache(storageDirectory: rootDirectory)
+        let contains = try await newCache.contains(for: key, codec: codec)
+        let metadata = try await newCache.metadata(for: key, codec: codec)
+        let decoded = try await newCache.valueIfCached(for: key, codec: codec)
+
+        #expect(contains)
+        #expect(metadata?.byteCount == 6)
+        #expect(metadata?.codecIdentifier == codec.identifier)
+        #expect(decoded == nil)
+    }
+}
+
+@Test func yCacheTypedFacadeExposesLifecycleOperations() async throws {
+    try await withYCache { cache, _ in
+        let key = yCacheKey("typed-lifecycle")
+        let typed = cache.using(PublicUTF8StringCodec())
+
+        try await typed.store("stored", for: key)
+
+        let containsBeforeRemoval = try await typed.contains(for: key)
+        let metadataBeforeRemoval = try await typed.metadata(for: key)
+        let removed = try await typed.remove(for: key)
+        let containsAfterRemoval = try await typed.contains(for: key)
+
+        #expect(containsBeforeRemoval)
+        #expect(metadataBeforeRemoval?.byteCount == 6)
+        #expect(removed)
+        #expect(!containsAfterRemoval)
+    }
+}
+
+@Test func yCacheStorageUsageReportsEntriesBytesAndMaximum() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(
+        "YashimaPublicStorageUsageTests-\(UUID().uuidString)",
+        isDirectory: true
+    )
+    defer {
+        try? FileManager.default.removeItem(at: rootDirectory)
+    }
+
+    let cache = YCache(storageDirectory: rootDirectory, storageMaximumByteCount: 7)
+    let codec = PublicUTF8StringCodec()
+
+    try await cache.store("12345", for: yCacheKey("usage-first"), codec: codec)
+    try await cache.store("abcde", for: yCacheKey("usage-second"), codec: codec)
+
+    let usage = try await cache.storageUsage()
+
+    #expect(usage.maximumByteCount == 7)
+    #expect(usage.byteCount <= 7)
+    #expect(usage.entryCount == 1)
+}
+
+@Test func yCacheBestEffortWriteFailureReturnsGeneratedValueAndCachesInMemoryOnly() async throws {
+    let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+        "YashimaPublicWriteFailureTests-\(UUID().uuidString)",
+        isDirectory: false
+    )
+    try Data("not-a-directory".utf8).write(to: rootURL)
+    defer {
+        try? FileManager.default.removeItem(at: rootURL)
+    }
+
+    let cache = YCache(storageDirectory: rootURL)
+    let key = yCacheKey("best-effort-write-failure")
+    let codec = PublicUTF8StringCodec()
+
+    let resolved = try await cache.resolve(
+        for: key,
+        codec: codec,
+        options: .init(writeFailurePolicy: .bestEffort)
+    ) {
+        "memory"
+    }
+    let memoryHit = try await cache.peek(for: key, codec: codec)
+    let persisted = try await YCache(storageDirectory: rootURL).valueIfCached(for: key, codec: codec)
+
+    #expect(resolved.value == "memory")
+    #expect(resolved.source == .generated)
+    #expect(resolved.metadata?.byteCount == 6)
+    #expect(memoryHit == "memory")
+    #expect(persisted == nil)
+}
+
+@Test func yCacheThrowingWriteFailureDoesNotCacheIncompleteEntry() async throws {
+    let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+        "YashimaPublicThrowingWriteFailureTests-\(UUID().uuidString)",
+        isDirectory: false
+    )
+    try Data("not-a-directory".utf8).write(to: rootURL)
+    defer {
+        try? FileManager.default.removeItem(at: rootURL)
+    }
+
+    let cache = YCache(storageDirectory: rootURL)
+    let key = yCacheKey("throwing-write-failure")
+    let codec = PublicUTF8StringCodec()
+
+    do {
+        _ = try await cache.value(for: key, codec: codec) {
+            "should-not-cache"
+        }
+        Issue.record("Expected storage write failure to throw.")
+    } catch {
+    }
+
+    let memoryMiss = try await cache.peek(for: key, codec: codec)
+    let persisted = try await YCache(storageDirectory: rootURL).valueIfCached(for: key, codec: codec)
+
+    #expect(memoryMiss == nil)
+    #expect(persisted == nil)
+}
+
 @Test func yCacheOptionalValueDoesNotCacheNilGeneration() async throws {
     try await withYCache { cache, _ in
         let key = yCacheKey("optional")
@@ -211,6 +403,22 @@ private struct PublicUTF8StringCodec: CacheCodec {
     func decode(_ data: Data) throws -> String {
         String(decoding: data, as: UTF8.self)
     }
+}
+
+private struct PublicThrowingDecodeStringCodec: CacheCodec {
+    var identifier = "public-throwing-decode-string-v1"
+
+    func encode(_ value: String) throws -> Data {
+        Data(value.utf8)
+    }
+
+    func decode(_ data: Data) throws -> String {
+        throw PublicCodecTestError.decode
+    }
+}
+
+private enum PublicCodecTestError: Error {
+    case decode
 }
 
 private actor YCacheCallCounter {

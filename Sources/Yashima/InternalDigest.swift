@@ -15,6 +15,10 @@ enum StableDigest {
         return String(decoding: output, as: UTF8.self)
     }
 
+    static func sha256Hex(_ string: String) -> String {
+        sha256Hex(Data(string.utf8))
+    }
+
     private static let hexDigits = Array("0123456789abcdef".utf8)
 }
 

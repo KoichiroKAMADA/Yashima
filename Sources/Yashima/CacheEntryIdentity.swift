@@ -3,6 +3,7 @@ import Foundation
 struct CacheEntryIdentity: Sendable, Hashable, Codable {
     var entryHash: String
     var keyHash: CacheKeyHash
+    var namespace: String
     var codecIdentifier: String
 
     init<C: CacheCodec>(key: CacheKey, codec: C) {
@@ -11,6 +12,7 @@ struct CacheEntryIdentity: Sendable, Hashable, Codable {
 
     init(key: CacheKey, codecIdentifier: String) {
         self.keyHash = key.stableHash
+        self.namespace = key.namespace
         self.codecIdentifier = codecIdentifier
 
         var writer = CacheCanonicalWriter()

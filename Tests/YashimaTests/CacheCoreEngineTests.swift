@@ -275,7 +275,11 @@ import Testing
         try await storage.store(Data("not-decodable".utf8), for: identity)
 
         do {
-            _ = try await engine.resolve(for: key, codec: codec) {
+            _ = try await engine.resolve(
+                for: key,
+                codec: codec,
+                options: .init(readFailurePolicy: .throwError)
+            ) {
                 await counter.increment()
                 return "generated"
             }
@@ -283,6 +287,110 @@ import Testing
         } catch CoreEngineTestError.decode {
         }
 
+        #expect(await counter.count == 0)
+    }
+}
+
+@Test func coreEngineTreatsDecodeFailureAsMissByDefault() async throws {
+    try await withCoreEngine { engine, _, storage, _ in
+        let key = coreKey("decode-failure-as-miss")
+        let codec = ThrowingDecodeStringCodec()
+        let identity = CacheEntryIdentity(key: key, codec: codec)
+        let counter = CallCounter()
+        try await storage.store(Data("not-decodable".utf8), for: identity)
+
+        let resolved = try await engine.resolve(for: key, codec: codec) {
+            await counter.increment()
+            return "generated"
+        }
+        let storedAfterDecodeFailure = try await storage.loadData(for: identity)
+
+        #expect(resolved.value == "generated")
+        #expect(resolved.source == .generated)
+        #expect(storedAfterDecodeFailure?.data == Data("generated".utf8))
+        #expect(await counter.count == 1)
+    }
+}
+
+@Test func coreEngineTreatsCorruptedStorageAsMissByDefault() async throws {
+    try await withCoreEngine { engine, _, storage, _ in
+        let key = coreKey("corrupted-storage-as-miss")
+        let codec = UTF8StringCodec()
+        let identity = CacheEntryIdentity(key: key, codec: codec)
+        let location = await storage.location(for: identity)
+        let counter = CallCounter()
+
+        try await storage.store(Data("old".utf8), for: identity)
+        try Data("tampered".utf8).write(to: location.dataURL)
+
+        let resolved = try await engine.resolve(for: key, codec: codec) {
+            await counter.increment()
+            return "new"
+        }
+        let stored = try await storage.loadData(for: identity)
+
+        #expect(resolved.value == "new")
+        #expect(resolved.source == .generated)
+        #expect(stored?.data == Data("new".utf8))
+        #expect(await counter.count == 1)
+    }
+}
+
+@Test func coreEnginePropagatesCorruptedStorageWhenPolicyThrows() async throws {
+    try await withCoreEngine { engine, _, storage, _ in
+        let key = coreKey("corrupted-storage-throws")
+        let codec = UTF8StringCodec()
+        let identity = CacheEntryIdentity(key: key, codec: codec)
+        let location = await storage.location(for: identity)
+        let counter = CallCounter()
+
+        try await storage.store(Data("old".utf8), for: identity)
+        try Data("tampered".utf8).write(to: location.dataURL)
+
+        do {
+            _ = try await engine.resolve(
+                for: key,
+                codec: codec,
+                options: .init(readFailurePolicy: .throwError)
+            ) {
+                await counter.increment()
+                return "new"
+            }
+            Issue.record("Expected corrupted storage to throw.")
+        } catch StorageCacheStoreError.dataMismatch {
+        }
+
+        #expect(await counter.count == 0)
+    }
+}
+
+@Test func coreEngineCacheOnlyTreatsCorruptedStorageAsMissWithoutGenerating() async throws {
+    try await withCoreEngine { engine, _, storage, _ in
+        let key = coreKey("cache-only-corruption")
+        let codec = UTF8StringCodec()
+        let identity = CacheEntryIdentity(key: key, codec: codec)
+        let location = await storage.location(for: identity)
+        let counter = CallCounter()
+
+        try await storage.store(Data("old".utf8), for: identity)
+        try Data("tampered".utf8).write(to: location.dataURL)
+
+        do {
+            _ = try await engine.resolve(
+                for: key,
+                codec: codec,
+                options: .init(lookupPolicy: .cacheOnly)
+            ) {
+                await counter.increment()
+                return "new"
+            }
+            Issue.record("Expected cache-only corrupted storage to miss.")
+        } catch CacheCoreError.cacheMiss {
+        }
+
+        let stored = try await storage.loadData(for: identity)
+
+        #expect(stored == nil)
         #expect(await counter.count == 0)
     }
 }
