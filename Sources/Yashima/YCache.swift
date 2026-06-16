@@ -8,20 +8,25 @@ public final class YCache: Sendable {
     public init(configuration: Configuration) {
         self.configuration = configuration
         let memory = MemoryCacheStore(limits: configuration.memoryLimits)
-        let storage = StorageCacheStore(rootDirectory: configuration.storageDirectory)
+        let storage = StorageCacheStore(
+            rootDirectory: configuration.storageDirectory,
+            maximumByteCount: configuration.storageMaximumByteCount
+        )
         self.engine = CacheCoreEngine(memory: memory, storage: storage)
     }
 
     public convenience init(
         storageDirectory: URL,
         memoryMaximumCost: Int? = nil,
-        memoryMaximumEntryCount: Int? = nil
+        memoryMaximumEntryCount: Int? = nil,
+        storageMaximumByteCount: Int? = nil
     ) {
         self.init(
             configuration: Configuration(
                 storageDirectory: storageDirectory,
                 memoryMaximumCost: memoryMaximumCost,
-                memoryMaximumEntryCount: memoryMaximumEntryCount
+                memoryMaximumEntryCount: memoryMaximumEntryCount,
+                storageMaximumByteCount: storageMaximumByteCount
             )
         )
     }
@@ -135,6 +140,24 @@ public final class YCache: Sendable {
         }
     }
 
+    public func metadata<C: CacheCodec>(
+        for key: CacheKey,
+        codec: C
+    ) async throws -> Metadata? {
+        try await translateCoreErrors {
+            try await engine.metadata(for: key, codec: codec).map(Metadata.init)
+        }
+    }
+
+    public func contains<C: CacheCodec>(
+        for key: CacheKey,
+        codec: C
+    ) async throws -> Bool {
+        try await translateCoreErrors {
+            try await engine.contains(for: key, codec: codec)
+        }
+    }
+
     public func putInMemory<C: CacheCodec>(
         _ value: C.Value,
         for key: CacheKey,
@@ -154,6 +177,41 @@ public final class YCache: Sendable {
     ) async throws {
         _ = try await storeResolved(value, for: key, codec: codec, options: options)
     }
+
+    @discardableResult
+    public func remove<C: CacheCodec>(
+        for key: CacheKey,
+        codec: C
+    ) async throws -> Bool {
+        try await translateCoreErrors {
+            try await engine.remove(for: key, codec: codec)
+        }
+    }
+
+    public func removeAll() async throws {
+        try await translateCoreErrors {
+            try await engine.removeAll()
+        }
+    }
+
+    public func removeAll(in namespace: String) async throws {
+        try await translateCoreErrors {
+            try await engine.removeAll(in: namespace)
+        }
+    }
+
+    public func storageUsage() async throws -> StorageUsage {
+        try await translateCoreErrors {
+            StorageUsage(try await engine.storageUsage())
+        }
+    }
+
+    @discardableResult
+    public func trimStorageIfNeeded() async throws -> StorageUsage {
+        try await translateCoreErrors {
+            StorageUsage(try await engine.trimStorageIfNeeded())
+        }
+    }
 }
 
 extension YCache {
@@ -161,15 +219,18 @@ extension YCache {
         public var storageDirectory: URL
         public var memoryMaximumCost: Int?
         public var memoryMaximumEntryCount: Int?
+        public var storageMaximumByteCount: Int?
 
         public init(
             storageDirectory: URL,
             memoryMaximumCost: Int? = nil,
-            memoryMaximumEntryCount: Int? = nil
+            memoryMaximumEntryCount: Int? = nil,
+            storageMaximumByteCount: Int? = nil
         ) {
             self.storageDirectory = storageDirectory
             self.memoryMaximumCost = memoryMaximumCost.map { max(0, $0) }
             self.memoryMaximumEntryCount = memoryMaximumEntryCount.map { max(0, $0) }
+            self.storageMaximumByteCount = storageMaximumByteCount.map { max(0, $0) }
         }
     }
 
@@ -177,15 +238,21 @@ extension YCache {
         public var cost: CacheCost?
         public var lookupPolicy: CacheLookupPolicy
         public var writePolicy: CacheWritePolicy
+        public var readFailurePolicy: CacheReadFailurePolicy
+        public var writeFailurePolicy: CacheWriteFailurePolicy
 
         public init(
             cost: CacheCost? = nil,
             lookupPolicy: CacheLookupPolicy = .normal,
-            writePolicy: CacheWritePolicy = .memoryAndStorage
+            writePolicy: CacheWritePolicy = .memoryAndStorage,
+            readFailurePolicy: CacheReadFailurePolicy = .treatAsMiss,
+            writeFailurePolicy: CacheWriteFailurePolicy = .throwError
         ) {
             self.cost = cost
             self.lookupPolicy = lookupPolicy
             self.writePolicy = writePolicy
+            self.readFailurePolicy = readFailurePolicy
+            self.writeFailurePolicy = writeFailurePolicy
         }
 
         public static let `default` = Options()
@@ -235,6 +302,22 @@ extension YCache {
             self.createdAt = createdAt
             self.lastAccessedAt = lastAccessedAt
             self.codecIdentifier = codecIdentifier
+        }
+    }
+
+    public struct StorageUsage: Sendable, Equatable {
+        public let byteCount: Int
+        public let entryCount: Int
+        public let maximumByteCount: Int?
+
+        public init(
+            byteCount: Int,
+            entryCount: Int,
+            maximumByteCount: Int?
+        ) {
+            self.byteCount = byteCount
+            self.entryCount = entryCount
+            self.maximumByteCount = maximumByteCount
         }
     }
 
@@ -313,6 +396,14 @@ extension YCache {
             try await base.peek(for: key, codec: codec)
         }
 
+        public func metadata(for key: CacheKey) async throws -> Metadata? {
+            try await base.metadata(for: key, codec: codec)
+        }
+
+        public func contains(for key: CacheKey) async throws -> Bool {
+            try await base.contains(for: key, codec: codec)
+        }
+
         public func putInMemory(
             _ value: C.Value,
             for key: CacheKey,
@@ -337,6 +428,11 @@ extension YCache {
                 codec: codec,
                 options: options
             )
+        }
+
+        @discardableResult
+        public func remove(for key: CacheKey) async throws -> Bool {
+            try await base.remove(for: key, codec: codec)
         }
     }
 }
@@ -407,7 +503,9 @@ private extension YCache.Options {
         CacheCoreOptions(
             cost: cost,
             lookupPolicy: lookupPolicy,
-            writePolicy: writePolicy
+            writePolicy: writePolicy,
+            readFailurePolicy: readFailurePolicy,
+            writeFailurePolicy: writeFailurePolicy
         )
     }
 }
@@ -444,6 +542,16 @@ private extension YCache.Metadata {
             createdAt: metadata.createdAt,
             lastAccessedAt: metadata.lastAccessedAt,
             codecIdentifier: metadata.codecIdentifier
+        )
+    }
+}
+
+private extension YCache.StorageUsage {
+    init(_ usage: CacheCoreStorageUsage) {
+        self.init(
+            byteCount: usage.byteCount,
+            entryCount: usage.entryCount,
+            maximumByteCount: usage.maximumByteCount
         )
     }
 }

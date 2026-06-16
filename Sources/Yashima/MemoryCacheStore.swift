@@ -29,6 +29,16 @@ actor MemoryCacheStore {
         entries[identity] != nil
     }
 
+    func peekMetadata(for identity: CacheEntryIdentity) -> CacheCoreMetadata? {
+        guard let entry = entries[identity],
+              let value = entry.value as? any CacheCoreMemoryMetadataProviding
+        else {
+            return nil
+        }
+
+        return value.cacheCoreMetadata
+    }
+
     @discardableResult
     func put<Value: Sendable>(
         _ value: Value,
@@ -64,6 +74,15 @@ actor MemoryCacheStore {
     func removeAll(keepingCapacity keepCapacity: Bool = false) {
         entries.removeAll(keepingCapacity: keepCapacity)
         totalCost = 0
+    }
+
+    func removeAll(in namespace: String) {
+        let identities = entries.keys.filter { $0.namespace == namespace }
+        for identity in identities {
+            if let removed = entries.removeValue(forKey: identity) {
+                totalCost -= removed.cost
+            }
+        }
     }
 
     @discardableResult
