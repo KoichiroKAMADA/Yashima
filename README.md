@@ -1,3 +1,7 @@
+<p align="right">
+  <strong>English</strong> | <a href="README.ja.md">日本語</a>
+</p>
+
 # Yashima
 
 <p align="center">
