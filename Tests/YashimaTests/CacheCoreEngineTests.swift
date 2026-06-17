@@ -117,6 +117,176 @@ import Testing
     }
 }
 
+@Test func coreEngineCancelledWaiterDoesNotCancelProducerWhenOtherWaitersRemain() async throws {
+    try await withCoreEngine { engine, _, _, _ in
+        let key = coreKey("partial-cancel")
+        let codec = UTF8StringCodec()
+        let counter = CallCounter()
+        let gate = AsyncGate()
+        let options = CacheCoreOptions(singleFlightPolicy: .cancelWhenNoWaiters)
+
+        let first = Task {
+            try await engine.resolve(for: key, codec: codec, options: options) {
+                let invocation = await counter.increment()
+                await gate.wait()
+                return "shared-\(invocation)"
+            }
+        }
+        await counter.waitUntil(1)
+
+        let second = Task {
+            try await engine.resolve(for: key, codec: codec, options: options) {
+                let invocation = await counter.increment()
+                await gate.wait()
+                return "shared-\(invocation)"
+            }
+        }
+
+        try await Task.sleep(nanoseconds: 20_000_000)
+        first.cancel()
+        await expectCancellation(from: first)
+        await gate.open()
+
+        let resolved = try await second.value
+        #expect(resolved.value == "shared-1")
+        #expect(resolved.wasSharedGeneration)
+        #expect(await counter.count == 1)
+    }
+}
+
+@Test func coreEngineCancelsProducerWhenNoWaitersRemainAndAllowsRegeneration() async throws {
+    try await withCoreEngine { engine, _, _, _ in
+        let key = coreKey("all-cancel")
+        let codec = UTF8StringCodec()
+        let counter = CallCounter()
+        let probe = CancellationProbe()
+        let options = CacheCoreOptions(singleFlightPolicy: .cancelWhenNoWaiters)
+
+        let first = Task {
+            try await engine.resolve(for: key, codec: codec, options: options) {
+                _ = await counter.increment()
+                do {
+                    while true {
+                        try await Task.sleep(nanoseconds: 10_000_000)
+                    }
+                } catch is CancellationError {
+                    await probe.markObserved()
+                    throw CancellationError()
+                }
+            }
+        }
+        await counter.waitUntil(1)
+
+        let second = Task {
+            try await engine.resolve(for: key, codec: codec, options: options) {
+                _ = await counter.increment()
+                do {
+                    while true {
+                        try await Task.sleep(nanoseconds: 10_000_000)
+                    }
+                } catch is CancellationError {
+                    await probe.markObserved()
+                    throw CancellationError()
+                }
+            }
+        }
+
+        try await Task.sleep(nanoseconds: 20_000_000)
+        first.cancel()
+        second.cancel()
+
+        await expectCancellation(from: first)
+        await expectCancellation(from: second)
+        try await probe.waitUntilObserved()
+
+        let regenerated = try await engine.resolve(for: key, codec: codec, options: options) {
+            let invocation = await counter.increment()
+            return "fresh-\(invocation)"
+        }
+
+        #expect(regenerated.value == "fresh-2")
+        #expect(regenerated.source == .generated)
+        #expect(await counter.count == 2)
+    }
+}
+
+@Test func coreEngineDoesNotStoreNonCooperativeCancelledGeneratorResult() async throws {
+    try await withCoreEngine { engine, _, storage, _ in
+        let key = coreKey("cancelled-result")
+        let codec = UTF8StringCodec()
+        let identity = CacheEntryIdentity(key: key, codec: codec)
+        let counter = CallCounter()
+        let returned = AsyncGate()
+        let options = CacheCoreOptions(singleFlightPolicy: .cancelWhenNoWaiters)
+
+        let task = Task {
+            try await engine.resolve(for: key, codec: codec, options: options) {
+                _ = await counter.increment()
+                try? await Task.sleep(nanoseconds: 50_000_000)
+                await returned.open()
+                return "should-not-be-cached"
+            }
+        }
+
+        await counter.waitUntil(1)
+        task.cancel()
+        await expectCancellation(from: task)
+        await returned.wait()
+
+        do {
+            _ = try await engine.resolve(
+                for: key,
+                codec: codec,
+                options: .init(lookupPolicy: .cacheOnly)
+            ) {
+                "should-not-run"
+            }
+            Issue.record("Expected cancelled generation not to be cached.")
+        } catch CacheCoreError.cacheMiss {
+        }
+
+        let stored = try await storage.loadData(for: identity)
+        #expect(stored == nil)
+    }
+}
+
+@Test func coreEngineDisabledSingleFlightRunsIndependentGenerators() async throws {
+    try await withCoreEngine { engine, _, _, _ in
+        let key = coreKey("single-flight-disabled")
+        let codec = UTF8StringCodec()
+        let counter = CallCounter()
+        let gate = AsyncGate()
+        let taskCount = 6
+        let options = CacheCoreOptions(singleFlightPolicy: .disabled)
+
+        let values = try await withThrowingTaskGroup(of: String.self) { group in
+            for _ in 0..<taskCount {
+                group.addTask {
+                    let resolved = try await engine.resolve(for: key, codec: codec, options: options) {
+                        let invocation = await counter.increment()
+                        if invocation == taskCount {
+                            await gate.open()
+                        }
+                        await gate.wait()
+                        return "generated-\(invocation)"
+                    }
+                    #expect(!resolved.wasSharedGeneration)
+                    return resolved.value
+                }
+            }
+
+            var values: [String] = []
+            for try await value in group {
+                values.append(value)
+            }
+            return values
+        }
+
+        #expect(Set(values).count == taskCount)
+        #expect(await counter.count == taskCount)
+    }
+}
+
 @Test func coreEngineDoesNotSaveWhenGeneratorThrows() async throws {
     try await withCoreEngine { engine, _, storage, _ in
         let key = coreKey("throwing-generator")
@@ -484,10 +654,12 @@ private enum CoreEngineTestError: Error, Equatable {
     case generator
     case encode
     case decode
+    case timeout
 }
 
 private actor CallCounter {
     private var value = 0
+    private var waiters: [(target: Int, continuation: CheckedContinuation<Void, Never>)] = []
 
     var count: Int {
         value
@@ -496,7 +668,101 @@ private actor CallCounter {
     @discardableResult
     func increment() -> Int {
         value += 1
+        resumeSatisfiedWaiters()
         return value
+    }
+
+    func waitUntil(_ target: Int) async {
+        guard value < target else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            waiters.append((target: target, continuation: continuation))
+        }
+    }
+
+    private func resumeSatisfiedWaiters() {
+        var remaining: [(target: Int, continuation: CheckedContinuation<Void, Never>)] = []
+        for waiter in waiters {
+            if value >= waiter.target {
+                waiter.continuation.resume()
+            } else {
+                remaining.append(waiter)
+            }
+        }
+        waiters = remaining
+    }
+}
+
+private actor AsyncGate {
+    private var isOpen = false
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        guard !isOpen else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            continuations.append(continuation)
+        }
+    }
+
+    func open() {
+        guard !isOpen else {
+            return
+        }
+
+        isOpen = true
+        let continuations = continuations
+        self.continuations.removeAll()
+        for continuation in continuations {
+            continuation.resume()
+        }
+    }
+}
+
+private actor CancellationProbe {
+    private var observed = false
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+
+    func markObserved() {
+        guard !observed else {
+            return
+        }
+
+        observed = true
+        let continuations = continuations
+        self.continuations.removeAll()
+        for continuation in continuations {
+            continuation.resume()
+        }
+    }
+
+    func waitUntilObserved() async throws {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                await self.wait()
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: 1_000_000_000)
+                throw CoreEngineTestError.timeout
+            }
+
+            _ = try await group.next()
+            group.cancelAll()
+        }
+    }
+
+    private func wait() async {
+        guard !observed else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            continuations.append(continuation)
+        }
     }
 }
 
@@ -521,6 +787,18 @@ private func withCoreEngine<T>(
 
 private func coreKey(_ name: String) -> CacheKey {
     CacheKey(namespace: "core-engine-tests", identity: name)
+}
+
+private func expectCancellation<T>(
+    from task: Task<T, any Error>
+) async {
+    do {
+        _ = try await task.value
+        Issue.record("Expected task to throw CancellationError.")
+    } catch is CancellationError {
+    } catch {
+        Issue.record("Expected CancellationError, got \(error).")
+    }
 }
 
 private func fileExists(at url: URL) -> Bool {

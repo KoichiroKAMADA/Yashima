@@ -23,6 +23,7 @@ Yashima は、再生成可能だが生成コストの高いローカル結果の
 - `Data`、`Codable`、PNG、JPEG アーティファクト向けの typed codec。
 - `CacheKey` と `CacheCodec.identifier` の両方に基づくキャッシュ ID。
 - 同じ未生成アーティファクトへ並行リクエストが来たときに生成処理を共有する single-flight。
+- UI 上の表示・非表示に合わせて、待ち手がいなくなった生成を止められる cancellation-aware single-flight。
 - 破損した保存済みアーティファクトを miss として扱い、再生成できる disposable cache 向けの失敗ポリシー。
 
 ## 基本的な使い方
@@ -114,6 +115,27 @@ let cache = YCache(
 )
 ```
 
+## キャンセルと UI ライフサイクル
+
+デフォルトの single-flight は互換性を重視した挙動です。同じ key への並行リクエストは 1 つの producer を共有し、1 つの waiter がキャンセルされても producer は継続します。
+
+スクロール中のセル、サムネイル、MapKit snapshot、チャート snapshot のように、画面から消えた caller が待つ必要のない用途では、`cancelWhenNoWaiters` を指定します。
+
+```swift
+let options = YCache.Options(singleFlightPolicy: .cancelWhenNoWaiters)
+
+let snapshot = try await cache.png(for: key, options: options) {
+    try Task.checkCancellation()
+    return try await renderSnapshot()
+}
+```
+
+Yashima は waiter のキャンセルと producer のキャンセルを分けて扱います。1 つの waiter だけがキャンセルされ、他の waiter が残っている場合、producer は残りの caller のために継続します。すべての waiter がキャンセルされた場合、Yashima は producer をキャンセルし、in-flight entry を取り除き、キャンセルされた生成結果を保存しません。
+
+ただし、生成処理の中身は generator 側の責任です。時間のかかる renderer は `Task.checkCancellation()` を確認し、必要であれば snapshotter など下層の処理もキャンセルしてください。
+
+同じ key でも caller ごとに独立して生成させたい場合だけ、`.disabled` を使います。
+
 ## キャッシュのライフサイクル
 
 Yashima は再生成可能な値をキャッシュするため、ライフサイクル操作は明示的で小さく保っています。
@@ -156,7 +178,7 @@ iOS サンプルアプリは [`Examples/YashimaPreviewLab`](Examples/YashimaPrev
 - refresh、lookup、metadata、remove、namespace remove を混ぜたライフサイクル操作。
 - storage quota pressure、容量ぴったりでの置き換え、上限超過 entry の cleanup。
 - デフォルトのメモリ上限下で、古いメモリエントリがストレージへフォールバックする挙動。
-- 破損からの回復と、キャンセルが混ざる状況での安定性。
+- 破損からの回復と、cancellation-aware single-flight の安定性。
 
 ```sh
 swift run --package-path StressTests YashimaStressRunner --profile smoke
@@ -172,7 +194,7 @@ stress runner はベンチマーク結果を主張するためのものではあ
 
 ## 状態
 
-キャッシュ ID、メモリストア、ストレージストア、コアエンジン、codec ベースの `YCache` 公開 API、標準 codec、README で紹介している convenience helper は実装済みで、Swift Testing によるテストも用意されています。さらに、並行性とストレージ境界を合成ワークロードで検証する stress runner も用意しています。
+キャッシュ ID、メモリストア、ストレージストア、コアエンジン、codec ベースの `YCache` 公開 API、標準 codec、README で紹介している convenience helper は実装済みで、Swift Testing によるテストも用意されています。さらに、並行性、キャンセル、ストレージ境界を合成ワークロードで検証する stress runner も用意しています。
 
 ## 設計メモ
 

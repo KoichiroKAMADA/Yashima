@@ -13,6 +13,7 @@ public enum StressScenarios {
         StressScenario(name: "OversizedEntryPressure", run: oversizedEntryPressure),
         StressScenario(name: "CorruptionRecovery", run: corruptionRecovery),
         StressScenario(name: "CancellationChurn", run: cancellationChurn),
+        StressScenario(name: "CancellationAwareSingleFlight", run: cancellationAwareSingleFlight),
     ]
 
     private static func singleFlightBurst(
@@ -770,6 +771,189 @@ public enum StressScenarios {
             cancelledCount: cancelledCount
         )
     }
+
+    private static func cancellationAwareSingleFlight(
+        context: StressScenarioContext
+    ) async throws -> StressScenarioSummary {
+        let cache = YCache(storageDirectory: context.rootDirectory)
+        let options = YCache.Options(singleFlightPolicy: .cancelWhenNoWaiters)
+        let metrics = StressMetrics()
+
+        let partialKey = CacheKey(namespace: "stress-cancellation-aware", identity: "partial")
+        let partialPayload = DeterministicPayload.data(seed: context.seed, index: 201, byteCount: 8 * 1024)
+        let partialCounter = StressCounter()
+        let partialGate = StressGate()
+
+        let cancelledWaiter = Task {
+            try await cache.resolve(for: partialKey, codec: DataCodec(), options: options) {
+                _ = await partialCounter.increment()
+                await partialGate.wait()
+                return partialPayload
+            }
+        }
+        await partialCounter.waitUntil(1)
+
+        let survivingWaiter = Task {
+            try await cache.resolve(for: partialKey, codec: DataCodec(), options: options) {
+                _ = await partialCounter.increment()
+                await partialGate.wait()
+                return partialPayload
+            }
+        }
+
+        try await Task.sleep(nanoseconds: 5_000_000)
+        cancelledWaiter.cancel()
+        try await requireCancellation(cancelledWaiter)
+        await partialGate.open()
+
+        let survived = try await survivingWaiter.value
+        let partialGeneratorCount = await partialCounter.value
+        try require(survived.value == partialPayload, "Surviving waiter received the wrong payload.")
+        try require(survived.wasSharedGeneration, "Surviving waiter did not join the shared generation.")
+        try require(partialGeneratorCount == 1, "Partial cancellation restarted the producer unexpectedly.")
+        await metrics.recordOperation(operations: 2, generated: 1, cancelled: 1)
+
+        let allCancelKey = CacheKey(namespace: "stress-cancellation-aware", identity: "all-cancel")
+        let allCancelPayload = DeterministicPayload.data(seed: context.seed, index: 202, byteCount: 8 * 1024)
+        let allCancelCounter = StressCounter()
+        let cancellationProbe = StressCancellationProbe()
+
+        let firstCancelled = Task {
+            try await cache.resolve(for: allCancelKey, codec: DataCodec(), options: options) {
+                _ = await allCancelCounter.increment()
+                do {
+                    while true {
+                        try await Task.sleep(nanoseconds: 10_000_000)
+                    }
+                } catch is CancellationError {
+                    await cancellationProbe.markObserved()
+                    throw CancellationError()
+                }
+            }
+        }
+        await allCancelCounter.waitUntil(1)
+
+        let secondCancelled = Task {
+            try await cache.resolve(for: allCancelKey, codec: DataCodec(), options: options) {
+                _ = await allCancelCounter.increment()
+                do {
+                    while true {
+                        try await Task.sleep(nanoseconds: 10_000_000)
+                    }
+                } catch is CancellationError {
+                    await cancellationProbe.markObserved()
+                    throw CancellationError()
+                }
+            }
+        }
+
+        try await Task.sleep(nanoseconds: 5_000_000)
+        firstCancelled.cancel()
+        secondCancelled.cancel()
+        try await requireCancellation(firstCancelled)
+        try await requireCancellation(secondCancelled)
+        await cancellationProbe.waitUntilObserved()
+
+        let regenerated = try await cache.resolve(for: allCancelKey, codec: DataCodec(), options: options) {
+            _ = await allCancelCounter.increment()
+            return allCancelPayload
+        }
+        let allCancelGeneratorCount = await allCancelCounter.value
+        try require(regenerated.source == .generated, "Re-request after full cancellation did not regenerate.")
+        try require(regenerated.value == allCancelPayload, "Regenerated payload changed after full cancellation.")
+        try require(allCancelGeneratorCount == 2, "Full cancellation left stale in-flight state.")
+        await metrics.recordOperation(operations: 3, generated: 1, regenerated: 1, cancelled: 2)
+
+        let nonCooperativeKey = CacheKey(namespace: "stress-cancellation-aware", identity: "non-cooperative")
+        let nonCooperativePayload = DeterministicPayload.data(seed: context.seed, index: 203, byteCount: 8 * 1024)
+        let nonCooperativeCounter = StressCounter()
+        let nonCooperativeReturned = StressGate()
+
+        let nonCooperative = Task {
+            try await cache.resolve(for: nonCooperativeKey, codec: DataCodec(), options: options) {
+                _ = await nonCooperativeCounter.increment()
+                try? await Task.sleep(nanoseconds: 25_000_000)
+                await nonCooperativeReturned.open()
+                return nonCooperativePayload
+            }
+        }
+        await nonCooperativeCounter.waitUntil(1)
+        nonCooperative.cancel()
+        try await requireCancellation(nonCooperative)
+        await nonCooperativeReturned.wait()
+
+        do {
+            _ = try await cache.resolve(
+                for: nonCooperativeKey,
+                codec: DataCodec(),
+                options: YCache.Options(
+                    lookupPolicy: .cacheOnly,
+                    singleFlightPolicy: .cancelWhenNoWaiters
+                )
+            ) {
+                nonCooperativePayload
+            }
+            throw StressFailure("Non-cooperative cancelled result was cached.")
+        } catch YCache.Error.cacheMiss {
+        }
+        await metrics.recordOperation(operations: 2, cancelled: 1)
+
+        let randomCount = max(16, min(context.profile.concurrency * 2, context.profile.keyCount))
+        let randomTasks = (0..<randomCount).map { index in
+            Task { () -> Result<Data, any Error> in
+                let key = CacheKey(namespace: "stress-cancellation-aware-random", identity: "\(index)")
+                let payload = DeterministicPayload.data(seed: context.seed, index: 300 + index, byteCount: 4 * 1024)
+                do {
+                    let value = try await cache.value(for: key, codec: DataCodec(), options: options) {
+                        try await Task.sleep(nanoseconds: UInt64((index % 5) + 1) * 2_000_000)
+                        try Task.checkCancellation()
+                        return payload
+                    }
+                    return .success(value)
+                } catch {
+                    return .failure(error)
+                }
+            }
+        }
+
+        try await Task.sleep(nanoseconds: 2_000_000)
+        for (index, task) in randomTasks.enumerated() where index.isMultiple(of: 4) {
+            task.cancel()
+        }
+
+        var randomCancelled = 0
+        var randomSucceeded = 0
+        for task in randomTasks {
+            switch await task.value {
+            case .success:
+                randomSucceeded += 1
+            case .failure(let error):
+                if error is CancellationError {
+                    randomCancelled += 1
+                } else {
+                    throw error
+                }
+            }
+        }
+
+        for index in 0..<randomCount {
+            let key = CacheKey(namespace: "stress-cancellation-aware-random", identity: "\(index)")
+            let payload = DeterministicPayload.data(seed: context.seed, index: 300 + index, byteCount: 4 * 1024)
+            let value = try await cache.value(for: key, codec: DataCodec(), options: options) {
+                payload
+            }
+            try require(value == payload, "Random cancellation re-request returned a changed payload.")
+        }
+
+        await metrics.recordOperation(
+            operations: randomCount * 2,
+            generated: randomSucceeded,
+            regenerated: randomCancelled,
+            cancelled: randomCancelled
+        )
+
+        return await metrics.summary()
+    }
 }
 
 private enum ArtifactKind: Sendable {
@@ -873,6 +1057,16 @@ private func require(
     }
 }
 
+private func requireCancellation<T>(
+    _ task: Task<T, any Error>
+) async throws {
+    do {
+        _ = try await task.value
+        throw StressFailure("Expected CancellationError.")
+    } catch is CancellationError {
+    }
+}
+
 private func firstManagedFile(in rootDirectory: URL, suffix: String) throws -> URL {
     guard let enumerator = FileManager.default.enumerator(
         at: rootDirectory,
@@ -919,6 +1113,7 @@ private func managedFileCount(in rootDirectory: URL, suffix: String) throws -> I
 
 private actor StressCounter {
     private var count = 0
+    private var waiters: [(target: Int, continuation: CheckedContinuation<Void, Never>)] = []
 
     var value: Int {
         count
@@ -927,7 +1122,86 @@ private actor StressCounter {
     @discardableResult
     func increment() -> Int {
         count += 1
+        resumeSatisfiedWaiters()
         return count
+    }
+
+    func waitUntil(_ target: Int) async {
+        guard count < target else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            waiters.append((target: target, continuation: continuation))
+        }
+    }
+
+    private func resumeSatisfiedWaiters() {
+        var remaining: [(target: Int, continuation: CheckedContinuation<Void, Never>)] = []
+        for waiter in waiters {
+            if count >= waiter.target {
+                waiter.continuation.resume()
+            } else {
+                remaining.append(waiter)
+            }
+        }
+        waiters = remaining
+    }
+}
+
+private actor StressGate {
+    private var isOpen = false
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        guard !isOpen else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            continuations.append(continuation)
+        }
+    }
+
+    func open() {
+        guard !isOpen else {
+            return
+        }
+
+        isOpen = true
+        let continuations = continuations
+        self.continuations.removeAll()
+        for continuation in continuations {
+            continuation.resume()
+        }
+    }
+}
+
+private actor StressCancellationProbe {
+    private var observed = false
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+
+    func markObserved() {
+        guard !observed else {
+            return
+        }
+
+        observed = true
+        let continuations = continuations
+        self.continuations.removeAll()
+        for continuation in continuations {
+            continuation.resume()
+        }
+    }
+
+    func waitUntilObserved() async {
+        guard !observed else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            continuations.append(continuation)
+        }
     }
 }
 

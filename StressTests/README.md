@@ -7,9 +7,10 @@ deterministic.
 The runner checks correctness under concurrent get-or-generate calls, mixed
 artifact types, lifecycle operations, storage trimming, exact-capacity
 replacement, concurrent quota pressure, default memory-limit pressure,
-oversized-entry cleanup, recoverable corruption, and cancellation churn. It is
-not a benchmark harness: durations are reported as observations, but pass/fail
-is based on cache correctness.
+oversized-entry cleanup, recoverable corruption, cancellation churn, and
+cancellation-aware single-flight behavior. It is not a benchmark harness:
+durations are reported as observations, but pass/fail is based on cache
+correctness.
 
 ## Running
 
@@ -58,6 +59,7 @@ are disposable and must not be committed.
 | `OversizedEntryPressure` | Entries larger than the quota are not retained, and later valid entries can still be persisted. |
 | `CorruptionRecovery` | Recoverable data and metadata corruption can be treated as misses, while strict read policy still throws. |
 | `CancellationChurn` | Cancellation around shared generation does not leave the cache unable to serve later requests. |
+| `CancellationAwareSingleFlight` | `cancelWhenNoWaiters` keeps producers alive while waiters remain, cancels when all waiters leave, avoids storing cancelled results, and supports re-request after cancellation. |
 
 ## Public Data Policy
 
