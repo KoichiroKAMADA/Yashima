@@ -4,7 +4,8 @@ actor CacheCoreEngine {
     private let memory: MemoryCacheStore
     private let storage: StorageCacheStore
     private let now: @Sendable () -> Date
-    private var inFlight: [CacheEntryIdentity: Task<AnyCacheCoreResolved, Error>] = [:]
+    private var inFlight: [CacheInFlightIdentity: CacheInFlightEntry] = [:]
+    private var nextInFlightToken = 0
 
     init(
         memory: MemoryCacheStore,
@@ -23,14 +24,13 @@ actor CacheCoreEngine {
         generator: @escaping @Sendable () async throws -> C.Value
     ) async throws -> CacheCoreResolved<C.Value> {
         let identity = CacheEntryIdentity(key: key, codec: codec)
+        let inFlightIdentity = CacheInFlightIdentity(
+            entryIdentity: identity,
+            policy: options.singleFlightPolicy
+        )
 
-        if let task = inFlight[identity] {
-            let resolved = try await task.value
-            return try resolved.typed(as: C.Value.self, sharedFromInFlight: true)
-        }
-
-        let task = Task {
-            try await Self.resolveWithoutSingleFlight(
+        guard options.singleFlightPolicy.sharesGeneration else {
+            let resolved = try await Self.resolveWithoutSingleFlight(
                 identity: identity,
                 codec: codec,
                 options: options,
@@ -39,14 +39,147 @@ actor CacheCoreEngine {
                 now: now,
                 generator: generator
             )
-        }
-        inFlight[identity] = task
-        defer {
-            inFlight[identity] = nil
+            return try resolved.typed(as: C.Value.self, sharedFromInFlight: false)
         }
 
-        let resolved = try await task.value
-        return try resolved.typed(as: C.Value.self, sharedFromInFlight: false)
+        let waiterID = UUID()
+        let registration = CacheInFlightWaiterRegistration()
+
+        let waiterResult = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                Task {
+                    self.joinOrStartInFlight(
+                        inFlightIdentity,
+                        waiterID: waiterID,
+                        registration: registration,
+                        continuation: continuation,
+                        codec: codec,
+                        options: options,
+                        memory: memory,
+                        storage: storage,
+                        now: now,
+                        generator: generator
+                    )
+                }
+            }
+        } onCancel: {
+            if registration.cancel() {
+                Task {
+                    await self.cancelInFlightWaiter(waiterID, for: inFlightIdentity)
+                }
+            }
+        }
+
+        return try waiterResult.resolved.typed(
+            as: C.Value.self,
+            sharedFromInFlight: waiterResult.sharedFromInFlight
+        )
+    }
+
+    private func joinOrStartInFlight<C: CacheCodec>(
+        _ inFlightIdentity: CacheInFlightIdentity,
+        waiterID: UUID,
+        registration: CacheInFlightWaiterRegistration,
+        continuation: CheckedContinuation<CacheInFlightWaiterResult, any Error>,
+        codec: C,
+        options: CacheCoreOptions,
+        memory: MemoryCacheStore,
+        storage: StorageCacheStore,
+        now: @escaping @Sendable () -> Date,
+        generator: @escaping @Sendable () async throws -> C.Value
+    ) {
+        guard registration.markRegistered() else {
+            continuation.resume(throwing: CancellationError())
+            return
+        }
+
+        let waiter = CacheInFlightWaiter(
+            continuation: continuation,
+            sharedFromInFlight: inFlight[inFlightIdentity] != nil
+        )
+
+        if var entry = inFlight[inFlightIdentity] {
+            entry.waiters[waiterID] = waiter
+            inFlight[inFlightIdentity] = entry
+            return
+        }
+
+        nextInFlightToken += 1
+        let token = CacheInFlightToken(rawValue: nextInFlightToken)
+        let task = Task {
+            try await Self.resolveWithoutSingleFlight(
+                identity: inFlightIdentity.entryIdentity,
+                codec: codec,
+                options: options,
+                memory: memory,
+                storage: storage,
+                now: now,
+                generator: generator
+            )
+        }
+
+        inFlight[inFlightIdentity] = CacheInFlightEntry(
+            token: token,
+            policy: options.singleFlightPolicy,
+            task: task,
+            waiters: [waiterID: waiter]
+        )
+
+        Task {
+            let result: Result<AnyCacheCoreResolved, any Error>
+            do {
+                result = .success(try await task.value)
+            } catch {
+                result = .failure(error)
+            }
+            self.finishInFlight(inFlightIdentity, token: token, result: result)
+        }
+    }
+
+    private func cancelInFlightWaiter(
+        _ waiterID: UUID,
+        for inFlightIdentity: CacheInFlightIdentity
+    ) {
+        guard var entry = inFlight[inFlightIdentity],
+              let waiter = entry.waiters.removeValue(forKey: waiterID) else {
+            return
+        }
+
+        waiter.continuation.resume(throwing: CancellationError())
+
+        if entry.policy.cancelsProducerWhenNoWaiters && entry.waiters.isEmpty {
+            inFlight[inFlightIdentity] = nil
+            entry.task.cancel()
+        } else {
+            inFlight[inFlightIdentity] = entry
+        }
+    }
+
+    private func finishInFlight(
+        _ inFlightIdentity: CacheInFlightIdentity,
+        token: CacheInFlightToken,
+        result: Result<AnyCacheCoreResolved, any Error>
+    ) {
+        guard let entry = inFlight[inFlightIdentity],
+              entry.token == token else {
+            return
+        }
+
+        inFlight[inFlightIdentity] = nil
+
+        for waiter in entry.waiters.values {
+            switch result {
+            case .success(let resolved):
+                waiter.continuation.resume(
+                    returning: CacheInFlightWaiterResult(
+                        resolved: resolved,
+                        sharedFromInFlight: waiter.sharedFromInFlight
+                    )
+                )
+            case .failure(let error):
+                waiter.continuation.resume(throwing: error)
+            }
+        }
     }
 
     func peekMemory<C: CacheCodec>(
@@ -141,19 +274,22 @@ struct CacheCoreOptions: Sendable, Equatable {
     var writePolicy: CacheWritePolicy
     var readFailurePolicy: CacheReadFailurePolicy
     var writeFailurePolicy: CacheWriteFailurePolicy
+    var singleFlightPolicy: CacheSingleFlightPolicy
 
     init(
         cost: CacheCost? = nil,
         lookupPolicy: CacheLookupPolicy = .normal,
         writePolicy: CacheWritePolicy = .memoryAndStorage,
         readFailurePolicy: CacheReadFailurePolicy = .treatAsMiss,
-        writeFailurePolicy: CacheWriteFailurePolicy = .throwError
+        writeFailurePolicy: CacheWriteFailurePolicy = .throwError,
+        singleFlightPolicy: CacheSingleFlightPolicy = .share
     ) {
         self.cost = cost
         self.lookupPolicy = lookupPolicy
         self.writePolicy = writePolicy
         self.readFailurePolicy = readFailurePolicy
         self.writeFailurePolicy = writeFailurePolicy
+        self.singleFlightPolicy = singleFlightPolicy
     }
 
     static let `default` = CacheCoreOptions()
@@ -179,6 +315,12 @@ public enum CacheReadFailurePolicy: Sendable, Equatable {
 public enum CacheWriteFailurePolicy: Sendable, Equatable {
     case throwError
     case bestEffort
+}
+
+public enum CacheSingleFlightPolicy: Sendable, Hashable {
+    case share
+    case cancelWhenNoWaiters
+    case disabled
 }
 
 public enum CacheCost: Sendable, Equatable {
@@ -290,6 +432,58 @@ private struct AnyCacheCoreResolved: Sendable {
     }
 }
 
+private struct CacheInFlightIdentity: Sendable, Hashable {
+    var entryIdentity: CacheEntryIdentity
+    var policy: CacheSingleFlightPolicy
+}
+
+private struct CacheInFlightToken: Sendable, Hashable {
+    var rawValue: Int
+}
+
+private struct CacheInFlightEntry {
+    var token: CacheInFlightToken
+    var policy: CacheSingleFlightPolicy
+    var task: Task<AnyCacheCoreResolved, any Error>
+    var waiters: [UUID: CacheInFlightWaiter]
+}
+
+private struct CacheInFlightWaiter {
+    var continuation: CheckedContinuation<CacheInFlightWaiterResult, any Error>
+    var sharedFromInFlight: Bool
+}
+
+private struct CacheInFlightWaiterResult: Sendable {
+    var resolved: AnyCacheCoreResolved
+    var sharedFromInFlight: Bool
+}
+
+private final class CacheInFlightWaiterRegistration: @unchecked Sendable {
+    private let lock = NSLock()
+    private var isCancelled = false
+    private var isRegistered = false
+
+    func markRegistered() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard !isCancelled else {
+            return false
+        }
+
+        isRegistered = true
+        return true
+    }
+
+    func cancel() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+
+        isCancelled = true
+        return isRegistered
+    }
+}
+
 private extension CacheCoreEngine {
     static func resolveWithoutSingleFlight<C: CacheCodec>(
         identity: CacheEntryIdentity,
@@ -300,6 +494,8 @@ private extension CacheCoreEngine {
         now: @escaping @Sendable () -> Date,
         generator: @escaping @Sendable () async throws -> C.Value
     ) async throws -> AnyCacheCoreResolved {
+        try Task.checkCancellation()
+
         if options.lookupPolicy.readsMemory {
             if let resolved = try await resolveFromMemory(
                 identity: identity,
@@ -325,7 +521,9 @@ private extension CacheCoreEngine {
             throw CacheCoreError.cacheMiss
         }
 
+        var storedMetadata: CacheCoreMetadata?
         let value = try await generator()
+        try Task.checkCancellation()
         let resolved = try await storeGeneratedValue(
             value,
             identity: identity,
@@ -335,6 +533,16 @@ private extension CacheCoreEngine {
             storage: storage,
             now: now
         )
+        storedMetadata = resolved.metadata
+        do {
+            try Task.checkCancellation()
+        } catch is CancellationError {
+            if storedMetadata != nil {
+                await memory.removeValue(for: identity)
+                _ = try? await storage.removeValue(for: identity)
+            }
+            throw CancellationError()
+        }
         return AnyCacheCoreResolved(resolved)
     }
 
@@ -444,69 +652,92 @@ private extension CacheCoreEngine {
         storage: StorageCacheStore,
         now: @escaping @Sendable () -> Date
     ) async throws -> CacheCoreResolved<C.Value> {
-        let encodedData = try encodedDataIfNeeded(
-            value,
-            codec: codec,
-            writePolicy: options.writePolicy
-        )
+        var wroteStorage = false
+        var wroteMemory = false
 
-        let metadata: CacheCoreMetadata?
-        if options.writePolicy.writesStorage, let encodedData {
-            let cost = cacheCost(
-                for: value,
+        do {
+            try Task.checkCancellation()
+            let encodedData = try encodedDataIfNeeded(
+                value,
                 codec: codec,
-                encodedData: encodedData,
-                options: options
+                writePolicy: options.writePolicy
             )
-            do {
-                let storedMetadata = try await storage.store(
-                    encodedData,
-                    for: identity,
-                    cost: cost
+            try Task.checkCancellation()
+
+            let metadata: CacheCoreMetadata?
+            if options.writePolicy.writesStorage, let encodedData {
+                let cost = cacheCost(
+                    for: value,
+                    codec: codec,
+                    encodedData: encodedData,
+                    options: options
                 )
-                metadata = CacheCoreMetadata(storedMetadata)
-            } catch {
-                guard options.writeFailurePolicy.allowsBestEffortStorageFailure else {
-                    throw error
+                do {
+                    let storedMetadata = try await storage.store(
+                        encodedData,
+                        for: identity,
+                        cost: cost
+                    )
+                    wroteStorage = true
+                    try Task.checkCancellation()
+                    metadata = CacheCoreMetadata(storedMetadata)
+                } catch {
+                    if error is CancellationError {
+                        throw error
+                    }
+                    guard options.writeFailurePolicy.allowsBestEffortStorageFailure else {
+                        throw error
+                    }
+                    metadata = CacheCoreMetadata(
+                        identity: identity,
+                        byteCount: encodedData.count,
+                        cost: cost,
+                        date: now()
+                    )
                 }
+            } else if let encodedData {
+                let cost = cacheCost(
+                    for: value,
+                    codec: codec,
+                    encodedData: encodedData,
+                    options: options
+                )
                 metadata = CacheCoreMetadata(
                     identity: identity,
                     byteCount: encodedData.count,
                     cost: cost,
                     date: now()
                 )
+            } else {
+                metadata = nil
             }
-        } else if let encodedData {
-            let cost = cacheCost(
-                for: value,
-                codec: codec,
-                encodedData: encodedData,
-                options: options
-            )
-            metadata = CacheCoreMetadata(
-                identity: identity,
-                byteCount: encodedData.count,
-                cost: cost,
-                date: now()
-            )
-        } else {
-            metadata = nil
-        }
 
-        if options.writePolicy.writesMemory, let metadata {
-            await memory.put(
-                CacheCoreMemoryEntry(value: value, metadata: metadata),
-                for: identity,
-                cost: metadata.memoryCost
-            )
-        }
+            if options.writePolicy.writesMemory, let metadata {
+                try Task.checkCancellation()
+                await memory.put(
+                    CacheCoreMemoryEntry(value: value, metadata: metadata),
+                    for: identity,
+                    cost: metadata.memoryCost
+                )
+                wroteMemory = true
+                try Task.checkCancellation()
+            }
 
-        return CacheCoreResolved(
-            value: value,
-            source: .generated,
-            metadata: metadata,
-            wasSharedGeneration: false
-        )
+            return CacheCoreResolved(
+                value: value,
+                source: .generated,
+                metadata: metadata,
+                wasSharedGeneration: false
+            )
+        } catch is CancellationError {
+            if wroteMemory {
+                await memory.removeValue(for: identity)
+            }
+            if wroteStorage {
+                _ = try? await storage.removeValue(for: identity)
+            }
+            throw CancellationError()
+        }
     }
 
     static func cacheCost<C: CacheCodec>(
@@ -626,6 +857,26 @@ private extension CacheWriteFailurePolicy {
             false
         case .bestEffort:
             true
+        }
+    }
+}
+
+private extension CacheSingleFlightPolicy {
+    var sharesGeneration: Bool {
+        switch self {
+        case .share, .cancelWhenNoWaiters:
+            true
+        case .disabled:
+            false
+        }
+    }
+
+    var cancelsProducerWhenNoWaiters: Bool {
+        switch self {
+        case .cancelWhenNoWaiters:
+            true
+        case .share, .disabled:
+            false
         }
     }
 }

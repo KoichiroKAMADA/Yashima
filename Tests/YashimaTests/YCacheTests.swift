@@ -40,6 +40,16 @@ import Yashima
     #expect(unbounded.storageMaximumByteCount == nil)
 }
 
+@Test func yCacheOptionsExposeSingleFlightPolicy() {
+    let defaultOptions = YCache.Options()
+    let uiLifecycleOptions = YCache.Options(singleFlightPolicy: .cancelWhenNoWaiters)
+    let disabledOptions = YCache.Options(singleFlightPolicy: .disabled)
+
+    #expect(defaultOptions.singleFlightPolicy == .share)
+    #expect(uiLifecycleOptions.singleFlightPolicy == .cancelWhenNoWaiters)
+    #expect(disabledOptions.singleFlightPolicy == .disabled)
+}
+
 @Test func yCacheResolveGeneratesStoresAndReportsMetadata() async throws {
     try await withYCache { cache, rootDirectory in
         let key = yCacheKey("resolve")

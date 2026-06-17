@@ -20,6 +20,7 @@ This file tracks the intended public surface before implementation. Keep it smal
 - `CacheWritePolicy`
 - `CacheReadFailurePolicy`
 - `CacheWriteFailurePolicy`
+- `CacheSingleFlightPolicy`
 - `CacheCost`
 
 `Y` is reserved for the root type `YCache`. Do not introduce `YKey`, `YCodec`, or other prefixed vocabulary types.
@@ -109,8 +110,11 @@ digest mismatches are detected on read.
 `YCache.Options` includes:
 
 - `cost`, optional explicit cost override
+- `lookupPolicy`, default `.normal`
+- `writePolicy`, default `.memoryAndStorage`
 - `readFailurePolicy`, default `.treatAsMiss`
 - `writeFailurePolicy`, default `.throwError`
+- `singleFlightPolicy`, default `.share`
 
 When `cost` is omitted, `DataCodec` and `CodableCodec` use encoded byte count as
 their memory cost. `ImageCodec` estimates decoded bitmap memory instead of using
@@ -125,6 +129,24 @@ missing cache data, content digest mismatches, and decode failures.
 `CacheWriteFailurePolicy.bestEffort` treats storage write failure as a
 memory-only fallback when memory writes are enabled. Generator failures, encode
 failures, and read failures are not part of this policy.
+
+`CacheSingleFlightPolicy` controls how concurrent misses for the same key, codec,
+and sharing policy share generation work:
+
+- `.share` is the default. Waiters share one producer. Cancelling one waiter
+  does not cancel the producer while other waiters or future joiners may still
+  use it.
+- `.cancelWhenNoWaiters` is intended for UI lifecycle work. Cancelling one
+  waiter only cancels that waiter, but when all waiters are gone the producer is
+  cancelled, the in-flight entry is removed, and cancelled results are not
+  stored.
+- `.disabled` skips in-flight sharing so each caller performs its own lookup and
+  generation path.
+
+Generator closures should be cancellation-aware when using
+`.cancelWhenNoWaiters`. Yashima can cancel the producer task and avoid storing a
+cancelled result, but long-running renderers still need to check cancellation or
+cancel their underlying work.
 
 ## Typed Facade
 

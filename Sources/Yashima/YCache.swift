@@ -244,19 +244,22 @@ extension YCache {
         public var writePolicy: CacheWritePolicy
         public var readFailurePolicy: CacheReadFailurePolicy
         public var writeFailurePolicy: CacheWriteFailurePolicy
+        public var singleFlightPolicy: CacheSingleFlightPolicy
 
         public init(
             cost: CacheCost? = nil,
             lookupPolicy: CacheLookupPolicy = .normal,
             writePolicy: CacheWritePolicy = .memoryAndStorage,
             readFailurePolicy: CacheReadFailurePolicy = .treatAsMiss,
-            writeFailurePolicy: CacheWriteFailurePolicy = .throwError
+            writeFailurePolicy: CacheWriteFailurePolicy = .throwError,
+            singleFlightPolicy: CacheSingleFlightPolicy = .share
         ) {
             self.cost = cost
             self.lookupPolicy = lookupPolicy
             self.writePolicy = writePolicy
             self.readFailurePolicy = readFailurePolicy
             self.writeFailurePolicy = writeFailurePolicy
+            self.singleFlightPolicy = singleFlightPolicy
         }
 
         public static let `default` = Options()
@@ -509,7 +512,8 @@ private extension YCache.Options {
             lookupPolicy: lookupPolicy,
             writePolicy: writePolicy,
             readFailurePolicy: readFailurePolicy,
-            writeFailurePolicy: writeFailurePolicy
+            writeFailurePolicy: writeFailurePolicy,
+            singleFlightPolicy: singleFlightPolicy
         )
     }
 }

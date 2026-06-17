@@ -25,6 +25,8 @@ generation.
 - Cache identity based on both `CacheKey` and `CacheCodec.identifier`.
 - Single-flight generation so concurrent requests for the same artifact share
   work.
+- Cancellation-aware single-flight for UI-generated artifacts whose callers can
+  disappear while work is still running.
 - Disposable-cache failure semantics: corrupt stored artifacts can be treated as
   misses and regenerated.
 
@@ -144,6 +146,36 @@ let cache = YCache(
 )
 ```
 
+## Cancellation and UI Lifecycle
+
+The default single-flight behavior is conservative: concurrent requests for the
+same key share one producer, and the producer continues even if one waiter is
+cancelled. This keeps existing get-or-generate code predictable.
+
+For UI lifecycle work such as scrolling cells, thumbnails, MapKit snapshots, or
+chart snapshots, use `cancelWhenNoWaiters` so work stops when nothing on screen
+is still waiting for it:
+
+```swift
+let options = YCache.Options(singleFlightPolicy: .cancelWhenNoWaiters)
+
+let snapshot = try await cache.png(for: key, options: options) {
+    try Task.checkCancellation()
+    return try await renderSnapshot()
+}
+```
+
+Yashima separates waiter cancellation from producer cancellation. If one waiter
+is cancelled while other waiters remain, the producer keeps running for the
+remaining callers. If every waiter is cancelled, Yashima cancels the producer,
+removes the in-flight entry, and does not store a cancelled generation result.
+The generator still owns its side of the contract: long-running renderers should
+check cancellation and cancel underlying work such as snapshotters when their
+own task is cancelled.
+
+Use `.disabled` only when each caller should run an independent generation even
+for the same key.
+
 ## Cache Lifecycle
 
 Yashima caches values that are safe to regenerate, so cache lifecycle operations
@@ -202,7 +234,7 @@ under:
 - storage quota pressure, exact-capacity replacement, and oversized-entry
   cleanup;
 - default memory-limit pressure where older memory entries fall back to storage;
-- recoverable corruption and cancellation churn.
+- recoverable corruption and cancellation-aware single-flight churn.
 
 ```sh
 swift run --package-path StressTests YashimaStressRunner --profile smoke
@@ -224,8 +256,8 @@ regeneration.
 The cache identity, memory store, storage store, core engine, codec-based
 `YCache` public API, standard codecs, lifecycle APIs, storage trimming, failure
 policies, and README-first convenience helpers are implemented with Swift
-Testing coverage. A separate stress runner exercises concurrency and storage
-edge cases with synthetic workloads.
+Testing coverage. A separate stress runner exercises concurrency, cancellation,
+and storage edge cases with synthetic workloads.
 
 ## Design Notes
 
