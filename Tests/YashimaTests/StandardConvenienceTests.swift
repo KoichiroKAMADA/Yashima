@@ -139,6 +139,7 @@ import CoreGraphics
         #expect(imageSize(generated) == .init(width: 3, height: 2))
         #expect(imageSize(resolved.value) == .init(width: 3, height: 2))
         #expect(resolved.source == .memory)
+        #expect(resolved.metadata?.cost == 3 * 2 * 4)
         #expect(resolved.metadata?.codecIdentifier == defaultJPEG.identifier)
         #expect(persisted.source == .storage)
         #expect(imageSize(persisted.value) == .init(width: 3, height: 2))

@@ -6,9 +6,10 @@ deterministic.
 
 The runner checks correctness under concurrent get-or-generate calls, mixed
 artifact types, lifecycle operations, storage trimming, exact-capacity
-replacement, concurrent quota pressure, oversized-entry cleanup, recoverable
-corruption, and cancellation churn. It is not a benchmark harness: durations are
-reported as observations, but pass/fail is based on cache correctness.
+replacement, concurrent quota pressure, default memory-limit pressure,
+oversized-entry cleanup, recoverable corruption, and cancellation churn. It is
+not a benchmark harness: durations are reported as observations, but pass/fail
+is based on cache correctness.
 
 ## Running
 
@@ -53,6 +54,7 @@ are disposable and must not be committed.
 | `StorageLimitTrim` | Storage stays within `storageMaximumByteCount` while older entries are trimmed and misses can regenerate. |
 | `ExactCapacityReplacement` | A cache that can hold exactly one payload replaces the old entry and keeps the newest one readable from storage. |
 | `ConcurrentQuotaPressure` | Many concurrent writes under a tight quota leave valid retained entries, trim older entries, and keep temporary files clean. |
+| `MemoryLimitPressure` | Default memory limits evict older entries while persisted storage remains readable. |
 | `OversizedEntryPressure` | Entries larger than the quota are not retained, and later valid entries can still be persisted. |
 | `CorruptionRecovery` | Recoverable data and metadata corruption can be treated as misses, while strict read policy still throws. |
 | `CancellationChurn` | Cancellation around shared generation does not leave the cache unable to serve later requests. |

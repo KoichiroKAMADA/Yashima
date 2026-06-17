@@ -9,6 +9,7 @@ public enum StressScenarios {
         StressScenario(name: "StorageLimitTrim", run: storageLimitTrim),
         StressScenario(name: "ExactCapacityReplacement", run: exactCapacityReplacement),
         StressScenario(name: "ConcurrentQuotaPressure", run: concurrentQuotaPressure),
+        StressScenario(name: "MemoryLimitPressure", run: memoryLimitPressure),
         StressScenario(name: "OversizedEntryPressure", run: oversizedEntryPressure),
         StressScenario(name: "CorruptionRecovery", run: corruptionRecovery),
         StressScenario(name: "CancellationChurn", run: cancellationChurn),
@@ -506,6 +507,83 @@ public enum StressScenarios {
         return await metrics.summary()
     }
 
+    private static func memoryLimitPressure(
+        context: StressScenarioContext
+    ) async throws -> StressScenarioSummary {
+        let payloadSize = 2 * 1024 * 1024
+        let memoryLimit = YCache.Configuration.defaultMemoryMaximumCost
+        let storageLimit = YCache.Configuration.defaultStorageMaximumByteCount
+        let retainedMemoryCapacity = memoryLimit / payloadSize
+        let writeCount = retainedMemoryCapacity + 12
+        let cache = YCache(storageDirectory: context.rootDirectory)
+
+        try require(cache.configuration.memoryMaximumCost == memoryLimit, "Default memory limit was not configured.")
+        try require(cache.configuration.memoryMaximumEntryCount == nil, "Default memory entry count should be unbounded.")
+        try require(cache.configuration.storageMaximumByteCount == storageLimit, "Default storage limit was not configured.")
+
+        for index in 0..<writeCount {
+            let key = memoryPressureKey(index)
+            let expected = DeterministicPayload.data(
+                seed: context.seed,
+                index: index,
+                byteCount: payloadSize
+            )
+            let resolved = try await cache.resolve(for: key, codec: DataCodec()) {
+                expected
+            }
+            try require(resolved.source == .generated, "Memory pressure write was not generated.")
+            try require(resolved.value == expected, "Memory pressure write returned changed data.")
+        }
+
+        let newestIndex = writeCount - 1
+        let newest = try await cache.resolve(for: memoryPressureKey(newestIndex), codec: DataCodec()) {
+            throw StressFailure("Newest memory pressure entry should be cached.")
+        }
+        let newestExpected = DeterministicPayload.data(
+            seed: context.seed,
+            index: newestIndex,
+            byteCount: payloadSize
+        )
+        try require(newest.source == .memory, "Newest entry was not retained in memory under default limit.")
+        try require(newest.value == newestExpected, "Newest memory pressure entry changed.")
+
+        let oldest = try await cache.resolve(for: memoryPressureKey(0), codec: DataCodec()) {
+            throw StressFailure("Oldest memory pressure entry should be persisted to storage.")
+        }
+        let oldestExpected = DeterministicPayload.data(
+            seed: context.seed,
+            index: 0,
+            byteCount: payloadSize
+        )
+        try require(oldest.source == .storage, "Oldest entry was not evicted from memory to storage.")
+        try require(oldest.value == oldestExpected, "Oldest memory pressure entry changed.")
+
+        let sentinelKey = memoryPressureKey(writeCount)
+        let sentinel = DeterministicPayload.data(
+            seed: context.seed,
+            index: writeCount,
+            byteCount: payloadSize
+        )
+        let sentinelValue = try await cache.value(for: sentinelKey, codec: DataCodec()) {
+            sentinel
+        }
+        try require(sentinelValue == sentinel, "Sentinel write after memory pressure changed data.")
+
+        let usage = try await cache.storageUsage()
+        try require(usage.maximumByteCount == storageLimit, "Default storage maximum was not reported.")
+        try require(usage.byteCount <= storageLimit, "Default storage limit was exceeded during memory pressure.")
+        try require(usage.entryCount > 0, "Memory pressure left no storage entries.")
+
+        return StressScenarioSummary(
+            operations: writeCount + 4,
+            generatedCount: writeCount + 1,
+            memoryHitCount: 1,
+            storageHitCount: 1,
+            removedCount: max(0, writeCount - retainedMemoryCapacity),
+            message: "default memory limit \(memoryLimit) bytes, payload \(payloadSize) bytes"
+        )
+    }
+
     private static func oversizedEntryPressure(
         context: StressScenarioContext
     ) async throws -> StressScenarioSummary {
@@ -734,6 +812,12 @@ private func trimKey(_ index: Int) -> CacheKey {
 
 private func quotaKey(_ prefix: String, _ index: Int) -> CacheKey {
     CacheKey(namespace: "stress-quota", identity: prefix)
+        .variant("index", index)
+        .version("schema", 1)
+}
+
+private func memoryPressureKey(_ index: Int) -> CacheKey {
+    CacheKey(namespace: "stress-memory-pressure", identity: "entry")
         .variant("index", index)
         .version("schema", 1)
 }
