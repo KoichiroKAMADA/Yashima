@@ -1,7 +1,7 @@
 # Yashima
 
 <p align="center">
-  <img src="Documentation/Assets/yashima-hero.png" alt="Yashima" width="840">
+  <img src="Documentation/Assets/yashima-hero.jpg" alt="Yashima" width="840">
 </p>
 
 A Swift Concurrency-first cache engine for locally generated app artifacts.
@@ -31,10 +31,7 @@ generation.
 ## Basic Usage
 
 ```swift
-let cache = YCache(
-    storageDirectory: cacheDirectory,
-    storageMaximumByteCount: 200 * 1024 * 1024
-)
+let cache = YCache(storageDirectory: cacheDirectory)
 
 let thumbnails = cache.using(ImageCodec.jpeg(quality: 0.85))
 
@@ -70,6 +67,39 @@ let report = try await reports.value(for: key) {
 }
 
 let immediate = try await reports.peek(for: key)
+```
+
+## Default Cache Budgets
+
+By default, `YCache` uses a 64 MiB memory budget and a 128 MiB storage budget.
+Memory has no entry-count limit by default, so many small thumbnails can use the
+available memory budget without being pushed out early by an arbitrary count.
+
+These defaults are intentionally conservative. Yashima's storage hits are still
+fast enough for many locally generated artifacts, so most apps should start with
+the defaults and increase memory only after measuring a real workload. Keeping
+memory modest helps the host app stay stable while the file-backed storage layer
+continues to absorb larger generated results.
+
+You can tune the budgets explicitly:
+
+```swift
+let cache = YCache(
+    storageDirectory: cacheDirectory,
+    memoryMaximumCost: 96 * 1024 * 1024,
+    memoryMaximumEntryCount: 500,
+    storageMaximumByteCount: 256 * 1024 * 1024
+)
+```
+
+Pass `nil` explicitly for an unbounded layer:
+
+```swift
+let cache = YCache(
+    storageDirectory: cacheDirectory,
+    memoryMaximumCost: nil,
+    storageMaximumByteCount: nil
+)
 ```
 
 ## Cache Lifecycle
@@ -131,6 +161,7 @@ under:
   removal;
 - storage quota pressure, exact-capacity replacement, and oversized-entry
   cleanup;
+- default memory-limit pressure where older memory entries fall back to storage;
 - recoverable corruption and cancellation churn.
 
 ```sh

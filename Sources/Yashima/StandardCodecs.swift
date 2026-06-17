@@ -75,7 +75,7 @@ private extension CodableCodec.Format {
 }
 
 #if canImport(UIKit) || canImport(AppKit)
-public struct ImageCodec: CacheCodec, Equatable {
+public struct ImageCodec: CacheCodec, CacheMemoryCostEstimating, Equatable {
     #if canImport(UIKit)
     public typealias PlatformImage = UIImage
     #elseif canImport(AppKit)
@@ -134,6 +134,14 @@ public struct ImageCodec: CacheCodec, Equatable {
         return Value(image)
         #endif
     }
+
+    func estimatedMemoryCost(for value: any Sendable, encodedData: Data) -> Int? {
+        guard let imageValue = value as? Value else {
+            return nil
+        }
+
+        return Self.estimatedBitmapByteCount(for: imageValue.image) ?? encodedData.count
+    }
 }
 
 extension ImageCodec {
@@ -168,6 +176,39 @@ private extension ImageCodec {
 
         let clamped = min(1, max(0, quality))
         return min(100, max(0, Int((clamped * 100).rounded())))
+    }
+
+    #if canImport(UIKit)
+    static func estimatedBitmapByteCount(for image: UIImage) -> Int? {
+        if let cgImage = image.cgImage {
+            return max(0, cgImage.bytesPerRow * cgImage.height)
+        }
+
+        let pixelWidth = image.size.width * image.scale
+        let pixelHeight = image.size.height * image.scale
+        return estimatedBitmapByteCount(width: pixelWidth, height: pixelHeight)
+    }
+    #elseif canImport(AppKit)
+    static func estimatedBitmapByteCount(for image: NSImage) -> Int? {
+        var proposedRect = NSRect(origin: .zero, size: image.size)
+        if let cgImage = image.cgImage(forProposedRect: &proposedRect, context: nil, hints: nil) {
+            return max(0, cgImage.bytesPerRow * cgImage.height)
+        }
+
+        return estimatedBitmapByteCount(width: image.size.width, height: image.size.height)
+    }
+    #endif
+
+    static func estimatedBitmapByteCount(width: CGFloat, height: CGFloat) -> Int? {
+        guard width.isFinite, height.isFinite, width > 0, height > 0 else {
+            return nil
+        }
+
+        let bytes = (width.rounded(.up) * height.rounded(.up) * 4).rounded(.up)
+        guard bytes <= CGFloat(Int.max) else {
+            return Int.max
+        }
+        return max(0, Int(bytes))
     }
 
     #if canImport(UIKit)

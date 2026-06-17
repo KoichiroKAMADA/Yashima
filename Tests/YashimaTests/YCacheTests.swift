@@ -2,6 +2,44 @@ import Foundation
 import Testing
 import Yashima
 
+@Test func yCacheConfigurationUsesFiniteDefaultBudgets() {
+    let rootDirectory = FileManager.default.temporaryDirectory
+    let configuration = YCache.Configuration(storageDirectory: rootDirectory)
+    let cache = YCache(storageDirectory: rootDirectory)
+
+    #expect(YCache.Configuration.defaultMemoryMaximumCost == 64 * 1024 * 1024)
+    #expect(YCache.Configuration.defaultMemoryMaximumEntryCount == nil)
+    #expect(YCache.Configuration.defaultStorageMaximumByteCount == 128 * 1024 * 1024)
+    #expect(configuration.memoryMaximumCost == YCache.Configuration.defaultMemoryMaximumCost)
+    #expect(configuration.memoryMaximumEntryCount == nil)
+    #expect(configuration.storageMaximumByteCount == YCache.Configuration.defaultStorageMaximumByteCount)
+    #expect(cache.configuration == configuration)
+}
+
+@Test func yCacheConfigurationAllowsCustomAndExplicitUnboundedBudgets() {
+    let rootDirectory = FileManager.default.temporaryDirectory
+
+    let custom = YCache.Configuration(
+        storageDirectory: rootDirectory,
+        memoryMaximumCost: 12,
+        memoryMaximumEntryCount: 34,
+        storageMaximumByteCount: 56
+    )
+    let unbounded = YCache.Configuration(
+        storageDirectory: rootDirectory,
+        memoryMaximumCost: nil,
+        memoryMaximumEntryCount: nil,
+        storageMaximumByteCount: nil
+    )
+
+    #expect(custom.memoryMaximumCost == 12)
+    #expect(custom.memoryMaximumEntryCount == 34)
+    #expect(custom.storageMaximumByteCount == 56)
+    #expect(unbounded.memoryMaximumCost == nil)
+    #expect(unbounded.memoryMaximumEntryCount == nil)
+    #expect(unbounded.storageMaximumByteCount == nil)
+}
+
 @Test func yCacheResolveGeneratesStoresAndReportsMetadata() async throws {
     try await withYCache { cache, rootDirectory in
         let key = yCacheKey("resolve")
@@ -374,6 +412,99 @@ import Yashima
     }
 }
 
+@Test func yCacheDefaultMemoryHasNoEntryCountLimit() async throws {
+    try await withYCache { cache, _ in
+        let codec = DataCodec()
+        let entryCount = 150
+
+        for index in 0..<entryCount {
+            try await cache.store(
+                Data([UInt8(index % 256)]),
+                for: yCacheKey("small-\(index)"),
+                codec: codec
+            )
+        }
+
+        var memoryHitCount = 0
+        for index in 0..<entryCount {
+            if try await cache.peek(for: yCacheKey("small-\(index)"), codec: codec) != nil {
+                memoryHitCount += 1
+            }
+        }
+
+        #expect(memoryHitCount == entryCount)
+    }
+}
+
+@Test func yCacheSmallMemoryBudgetEvictsLRUAndKeepsStorageReadable() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(
+        "YashimaPublicAPITests-\(UUID().uuidString)",
+        isDirectory: true
+    )
+    let cache = YCache(
+        storageDirectory: rootDirectory,
+        memoryMaximumCost: 10,
+        storageMaximumByteCount: nil
+    )
+    defer {
+        try? FileManager.default.removeItem(at: rootDirectory)
+    }
+
+    let first = yCacheKey("lru-first")
+    let second = yCacheKey("lru-second")
+    let third = yCacheKey("lru-third")
+    let codec = DataCodec()
+
+    try await cache.store(Data(repeating: 1, count: 4), for: first, codec: codec)
+    try await cache.store(Data(repeating: 2, count: 4), for: second, codec: codec)
+    _ = try await cache.peek(for: first, codec: codec)
+    try await cache.store(Data(repeating: 3, count: 4), for: third, codec: codec)
+
+    let firstMemory = try await cache.peek(for: first, codec: codec)
+    let secondMemory = try await cache.peek(for: second, codec: codec)
+    let thirdMemory = try await cache.peek(for: third, codec: codec)
+    let secondStorage = try await cache.resolve(for: second, codec: codec) {
+        throw PublicCodecTestError.unexpectedGeneration
+    }
+
+    #expect(firstMemory == Data(repeating: 1, count: 4))
+    #expect(secondMemory == nil)
+    #expect(thirdMemory == Data(repeating: 3, count: 4))
+    #expect(secondStorage.source == .storage)
+    #expect(secondStorage.value == Data(repeating: 2, count: 4))
+}
+
+@Test func yCacheEntryLargerThanMemoryBudgetDoesNotStayInMemoryButPersistsToStorage() async throws {
+    let rootDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(
+        "YashimaPublicAPITests-\(UUID().uuidString)",
+        isDirectory: true
+    )
+    let cache = YCache(
+        storageDirectory: rootDirectory,
+        memoryMaximumCost: 5,
+        storageMaximumByteCount: nil
+    )
+    defer {
+        try? FileManager.default.removeItem(at: rootDirectory)
+    }
+
+    let key = yCacheKey("oversized-memory")
+    let value = Data(repeating: 9, count: 6)
+    let codec = DataCodec()
+
+    try await cache.store(value, for: key, codec: codec)
+    let memoryMiss = try await cache.peek(for: key, codec: codec)
+    let storageHit = try await cache.resolve(for: key, codec: codec) {
+        throw PublicCodecTestError.unexpectedGeneration
+    }
+    let stillMemoryMiss = try await cache.peek(for: key, codec: codec)
+
+    #expect(memoryMiss == nil)
+    #expect(storageHit.source == .storage)
+    #expect(storageHit.value == value)
+    #expect(stillMemoryMiss == nil)
+}
+
 @Test func yCacheCacheOnlyResolveThrowsPublicCacheMiss() async throws {
     try await withYCache { cache, _ in
         let key = yCacheKey("cache-only")
@@ -419,6 +550,7 @@ private struct PublicThrowingDecodeStringCodec: CacheCodec {
 
 private enum PublicCodecTestError: Error {
     case decode
+    case unexpectedGeneration
 }
 
 private actor YCacheCallCounter {
