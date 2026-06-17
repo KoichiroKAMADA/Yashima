@@ -60,6 +60,33 @@ let report = try await reports.value(for: key) {
 let immediate = try await reports.peek(for: key)
 ```
 
+## CacheKey の設計
+
+キャッシュで最も重要なのは key です。Yashima はストレージ、メモリ、並行生成を扱いやすくしますが、生成物が何に依存しているのかは、アプリ側が正しく表現する必要があります。
+
+小さなアプリでは、key は安定した文字列だけでも始められます。
+
+```swift
+let key = CacheKey("thumbnail-\(photoID)", namespace: "thumbnails")
+```
+
+本当に単純な対象であれば、この形で十分です。ただ、文字列補間でいくつもの要素をつなぎ始めると、その key が何に依存しているのかをレビューしづらくなります。Yashima では、不透明な長い文字列になる前に、それぞれの要素を名前付きの component として分けられます。`identity` にはキャッシュしたい安定した対象を入れます。`variant(_:_:)` には描画結果を変える入力を入れます。`version(_:_:)` は renderer や schema を変えたときに使います。
+
+```swift
+let key = CacheKey(namespace: "summary-maps", identity: summaryID)
+    .variant("kind", "route-map")
+    .variant("size", "\(pixelWidth)x\(pixelHeight)")
+    .variant("appearance", appearance)
+    .variant("routeDigest", routeDigest)
+    .variant("annotationDigest", annotationDigest)
+    .variant("lineWidth", normalizedLineWidth)
+    .version("renderer", 2)
+```
+
+よい key は、必ずしも長い key ではありません。ただし、完全な key である必要があります。サイズ、scale、appearance、locale、renderer option、元データの revision、そして大きな入力を要約した安定 digest など、生成結果を変え得る入力を含めます。永続的なキャッシュ ID には Swift の `hashValue` や `Hasher` を使わないでください。ルート、チャートのデータセット、レンダリング対象のドキュメントなど、大きな入力を要約したい場合は SHA-256 のような安定 digest を使います。
+
+判断基準はシンプルです。2 回の生成で違う bytes ができる可能性があるなら、`CacheKey` も違うべきです。key が正しければ、キャッシュ値は消えたり再生成されたりしても、要求と違う生成物が返ることはありません。
+
 ## デフォルトのキャッシュ容量
 
 `YCache` はデフォルトで、メモリ 64 MiB、ストレージ 128 MiB の容量上限を使います。メモリの entry 件数上限はデフォルトでは設定していません。そのため、小さなサムネイルを大量に扱う用途でも、任意の件数制限で早く追い出されず、容量上限の範囲でメモリを使えます。
@@ -102,7 +129,7 @@ let usage = try await cache.storageUsage()
 try await cache.trimStorageIfNeeded()
 ```
 
-`storageMaximumByteCount` を設定すると、ストレージ entry は least-recently-used の metadata に基づいて trim されます。storage hit は access time を更新します。生成物の同一性を決める入力は `CacheKey.variant(_:_:)` と `CacheKey.version(_:_:)` で表現し、Yashima は canonical key と codec identity を内部的にハッシュします。
+`storageMaximumByteCount` を設定すると、ストレージ entry は least-recently-used の metadata に基づいて trim されます。storage hit は access time を更新します。Yashima は canonical `CacheKey` と codec identity を内部的にハッシュします。
 
 既定の read failure policy では、破損したキャッシュファイルを miss として扱い、呼び出し側が再生成できます。厳密にエラーを扱いたい場合は `readFailurePolicy: .throwError` を指定できます。write では `writeFailurePolicy: .bestEffort` により、ストレージ永続化に失敗しても生成値を返し、メモリのみのキャッシュへフォールバックできます。
 
