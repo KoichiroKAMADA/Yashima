@@ -69,6 +69,48 @@ let report = try await reports.value(for: key) {
 let immediate = try await reports.peek(for: key)
 ```
 
+## Designing Cache Keys
+
+The most important part of any cache is the key. Yashima can make storage,
+memory, and concurrency predictable, but the app still needs to describe what
+the generated artifact actually depends on.
+
+For a small app, a key can be as simple as a stable string:
+
+```swift
+let key = CacheKey("thumbnail-\(photoID)", namespace: "thumbnails")
+```
+
+That stays pleasant while the identity is truly simple. Once a key starts
+combining several interpolated fragments, it becomes hard to review what the
+cache actually depends on. Yashima lets you move those pieces into named
+components before the key turns into an opaque string: use `identity` for the
+stable thing being cached, `variant(_:_:)` for inputs that change the rendered
+result, and `version(_:_:)` when your renderer or schema changes:
+
+```swift
+let key = CacheKey(namespace: "summary-maps", identity: summaryID)
+    .variant("kind", "route-map")
+    .variant("size", "\(pixelWidth)x\(pixelHeight)")
+    .variant("appearance", appearance)
+    .variant("routeDigest", routeDigest)
+    .variant("annotationDigest", annotationDigest)
+    .variant("lineWidth", normalizedLineWidth)
+    .version("renderer", 2)
+```
+
+A good key is not necessarily a long key, but it must be a complete key. Include
+every input that can change the artifact: size, scale, appearance, locale,
+renderer options, source-data revision, and any large input represented by a
+stable digest. Do not use Swift `hashValue` or `Hasher` for persisted cache
+identity; use a stable digest such as SHA-256 when you need to summarize a route,
+chart dataset, or rendered document.
+
+The rule of thumb is simple: if two generations can produce different bytes,
+their `CacheKey` should be different. If the key is right, cached values may be
+evicted and regenerated, but they should never be the wrong artifact for the
+request.
+
 ## Default Cache Budgets
 
 By default, `YCache` uses a 64 MiB memory budget and a 128 MiB storage budget.
@@ -120,9 +162,7 @@ try await cache.trimStorageIfNeeded()
 
 Storage entries are trimmed by least-recently-used metadata when
 `storageMaximumByteCount` is configured. Storage hits update their access time.
-Use `CacheKey.variant(_:_:)` and `CacheKey.version(_:_:)` to describe the inputs
-that make a generated artifact unique; Yashima hashes the canonical key and codec
-identity internally.
+Yashima hashes the canonical `CacheKey` and codec identity internally.
 
 `metadata(for:codec:)` and `contains(for:codec:)` are lightweight lookups. They
 do not decode the payload or prove that a later content digest check will
