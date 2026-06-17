@@ -15,6 +15,13 @@ Run the test suite:
 swift test
 ```
 
+Optional stress tests live in `StressTests` and are intended for larger behavior
+changes:
+
+```sh
+swift run --package-path StressTests YashimaStressRunner --profile smoke
+```
+
 ## Contribution Guidelines
 
 - Keep the public API small and easy to explain.
