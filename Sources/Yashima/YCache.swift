@@ -17,9 +17,9 @@ public final class YCache: Sendable {
 
     public convenience init(
         storageDirectory: URL,
-        memoryMaximumCost: Int? = nil,
+        memoryMaximumCost: Int? = Configuration.defaultMemoryMaximumCost,
         memoryMaximumEntryCount: Int? = nil,
-        storageMaximumByteCount: Int? = nil
+        storageMaximumByteCount: Int? = Configuration.defaultStorageMaximumByteCount
     ) {
         self.init(
             configuration: Configuration(
@@ -216,6 +216,10 @@ public final class YCache: Sendable {
 
 extension YCache {
     public struct Configuration: Sendable, Equatable {
+        public static let defaultMemoryMaximumCost = 64 * 1024 * 1024
+        public static let defaultMemoryMaximumEntryCount: Int? = nil
+        public static let defaultStorageMaximumByteCount = 128 * 1024 * 1024
+
         public var storageDirectory: URL
         public var memoryMaximumCost: Int?
         public var memoryMaximumEntryCount: Int?
@@ -223,9 +227,9 @@ extension YCache {
 
         public init(
             storageDirectory: URL,
-            memoryMaximumCost: Int? = nil,
-            memoryMaximumEntryCount: Int? = nil,
-            storageMaximumByteCount: Int? = nil
+            memoryMaximumCost: Int? = Self.defaultMemoryMaximumCost,
+            memoryMaximumEntryCount: Int? = Self.defaultMemoryMaximumEntryCount,
+            storageMaximumByteCount: Int? = Self.defaultStorageMaximumByteCount
         ) {
             self.storageDirectory = storageDirectory
             self.memoryMaximumCost = memoryMaximumCost.map { max(0, $0) }

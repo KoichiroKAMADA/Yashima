@@ -88,6 +88,17 @@ succeed. These lookup APIs may clean up invalid metadata or missing data files.
 namespace. More expressive tag or predicate invalidation is intentionally not in
 the initial public surface.
 
+`YCache.Configuration` exposes default budget constants:
+
+- `defaultMemoryMaximumCost == 64 * 1024 * 1024`
+- `defaultMemoryMaximumEntryCount == nil`
+- `defaultStorageMaximumByteCount == 128 * 1024 * 1024`
+
+The convenience initializer and `Configuration(storageDirectory:)` use those
+finite memory and storage budgets when the parameters are omitted. Passing
+`memoryMaximumCost: nil` or `storageMaximumByteCount: nil` explicitly keeps that
+layer unbounded. `memoryMaximumEntryCount` is optional and has no default limit.
+
 `YCache.Configuration.storageMaximumByteCount` enables storage trimming. When the
 limit is set, storage writes trim entries by least recent storage access. Storage
 hits update `lastAccessedAt`. `storageUsage()` and storage trimming are based on
@@ -97,8 +108,14 @@ digest mismatches are detected on read.
 
 `YCache.Options` includes:
 
+- `cost`, optional explicit cost override
 - `readFailurePolicy`, default `.treatAsMiss`
 - `writeFailurePolicy`, default `.throwError`
+
+When `cost` is omitted, `DataCodec` and `CodableCodec` use encoded byte count as
+their memory cost. `ImageCodec` estimates decoded bitmap memory instead of using
+the compressed PNG or JPEG byte count. When `cost` is provided, that explicit
+cost wins.
 
 `.treatAsMiss` is intended for disposable generated artifacts. Use `.throwError`
 when a caller needs strict cache corruption or decode failure reporting. It is

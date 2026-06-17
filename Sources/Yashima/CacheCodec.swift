@@ -8,3 +8,7 @@ public protocol CacheCodec: Sendable {
     func encode(_ value: Value) throws -> Data
     func decode(_ data: Data) throws -> Value
 }
+
+protocol CacheMemoryCostEstimating: Sendable {
+    func estimatedMemoryCost(for value: any Sendable, encodedData: Data) -> Int?
+}

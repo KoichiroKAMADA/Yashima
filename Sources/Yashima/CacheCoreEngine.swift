@@ -412,11 +412,18 @@ private extension CacheCoreEngine {
         }
 
         let metadata = CacheCoreMetadata(stored.metadata)
+        let memoryCost = cacheCost(
+            for: value,
+            codec: codec,
+            encodedData: stored.data,
+            options: options,
+            metadata: metadata
+        )
         if options.writePolicy.writesMemory {
             await memory.put(
                 CacheCoreMemoryEntry(value: value, metadata: metadata),
                 for: identity,
-                cost: metadata.memoryCost
+                cost: memoryCost
             )
         }
 
@@ -445,11 +452,17 @@ private extension CacheCoreEngine {
 
         let metadata: CacheCoreMetadata?
         if options.writePolicy.writesStorage, let encodedData {
+            let cost = cacheCost(
+                for: value,
+                codec: codec,
+                encodedData: encodedData,
+                options: options
+            )
             do {
                 let storedMetadata = try await storage.store(
                     encodedData,
                     for: identity,
-                    cost: options.cost?.value
+                    cost: cost
                 )
                 metadata = CacheCoreMetadata(storedMetadata)
             } catch {
@@ -459,15 +472,21 @@ private extension CacheCoreEngine {
                 metadata = CacheCoreMetadata(
                     identity: identity,
                     byteCount: encodedData.count,
-                    cost: options.cost?.value,
+                    cost: cost,
                     date: now()
                 )
             }
         } else if let encodedData {
+            let cost = cacheCost(
+                for: value,
+                codec: codec,
+                encodedData: encodedData,
+                options: options
+            )
             metadata = CacheCoreMetadata(
                 identity: identity,
                 byteCount: encodedData.count,
-                cost: options.cost?.value,
+                cost: cost,
                 date: now()
             )
         } else {
@@ -488,6 +507,39 @@ private extension CacheCoreEngine {
             metadata: metadata,
             wasSharedGeneration: false
         )
+    }
+
+    static func cacheCost<C: CacheCodec>(
+        for value: C.Value,
+        codec: C,
+        encodedData: Data,
+        options: CacheCoreOptions
+    ) -> Int? {
+        if let explicitCost = options.cost?.value {
+            return explicitCost
+        }
+
+        return (codec as? any CacheMemoryCostEstimating)?
+            .estimatedMemoryCost(for: value, encodedData: encodedData)
+    }
+
+    static func cacheCost<C: CacheCodec>(
+        for value: C.Value,
+        codec: C,
+        encodedData: Data,
+        options: CacheCoreOptions,
+        metadata: CacheCoreMetadata
+    ) -> Int {
+        if let resolvedCost = cacheCost(
+            for: value,
+            codec: codec,
+            encodedData: encodedData,
+            options: options
+        ) {
+            return resolvedCost
+        }
+
+        return metadata.memoryCost
     }
 
     static func encodedDataIfNeeded<C: CacheCodec>(

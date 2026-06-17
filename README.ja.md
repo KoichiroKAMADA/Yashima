@@ -5,7 +5,7 @@
 # Yashima
 
 <p align="center">
-  <img src="Documentation/Assets/yashima-hero.png" alt="Yashima" width="840">
+  <img src="Documentation/Assets/yashima-hero.jpg" alt="Yashima" width="840">
 </p>
 
 Swift Concurrency を前提にした、ローカル生成アーティファクト向けのキャッシュエンジンです。
@@ -60,6 +60,33 @@ let report = try await reports.value(for: key) {
 let immediate = try await reports.peek(for: key)
 ```
 
+## デフォルトのキャッシュ容量
+
+`YCache` はデフォルトで、メモリ 64 MiB、ストレージ 128 MiB の容量上限を使います。メモリの entry 件数上限はデフォルトでは設定していません。そのため、小さなサムネイルを大量に扱う用途でも、任意の件数制限で早く追い出されず、容量上限の範囲でメモリを使えます。
+
+このデフォルトは安全寄りに設定しています。Yashima はストレージ hit も多くのローカル生成アーティファクトに対して十分高速なので、まずはデフォルトで使い、実際のワークロードを測ってから必要な分だけメモリを増やすことをおすすめします。メモリを控えめに保つことで、ホストアプリの安定性を守りつつ、より大きな生成結果はファイルベースのストレージ層で受け止められます。
+
+必要な場合は、容量を明示的に調整できます。
+
+```swift
+let cache = YCache(
+    storageDirectory: cacheDirectory,
+    memoryMaximumCost: 96 * 1024 * 1024,
+    memoryMaximumEntryCount: 500,
+    storageMaximumByteCount: 256 * 1024 * 1024
+)
+```
+
+無制限にしたい場合は、`nil` を明示的に渡します。
+
+```swift
+let cache = YCache(
+    storageDirectory: cacheDirectory,
+    memoryMaximumCost: nil,
+    storageMaximumByteCount: nil
+)
+```
+
 ## キャッシュのライフサイクル
 
 Yashima は再生成可能な値をキャッシュするため、ライフサイクル操作は明示的で小さく保っています。
@@ -101,6 +128,7 @@ iOS サンプルアプリは [`Examples/YashimaPreviewLab`](Examples/YashimaPrev
 - `Data`、`Codable`、PNG、JPEG を混在させた並行生成。
 - refresh、lookup、metadata、remove、namespace remove を混ぜたライフサイクル操作。
 - storage quota pressure、容量ぴったりでの置き換え、上限超過 entry の cleanup。
+- デフォルトのメモリ上限下で、古いメモリエントリがストレージへフォールバックする挙動。
 - 破損からの回復と、キャンセルが混ざる状況での安定性。
 
 ```sh
