@@ -4,11 +4,29 @@
   <img src="Documentation/Assets/yashima-hero.png" alt="Yashima" width="840">
 </p>
 
-A Swift Concurrency-first get-or-generate cache for locally generated app artifacts.
+A Swift Concurrency-first cache engine for locally generated app artifacts.
 
 Not an image downloader. Not a database.
 
-Yashima is being designed for expensive local results that are safe to regenerate: thumbnails, previews, rendered charts, waveforms, summaries, and other derived artifacts.
+Yashima is designed for expensive local results that are safe to regenerate:
+thumbnails, previews, rendered charts, waveforms, summaries, and other derived
+artifacts.
+
+Use it when an app can recreate a value, but should not recreate it every time.
+Yashima gives that workflow a small public API, typed codecs, memory + storage
+caching, quota-based trimming, and Swift Concurrency-friendly single-flight
+generation.
+
+## Why Yashima
+
+- One async get-or-generate call for the common path.
+- L1 memory cache and L2 file-backed storage.
+- Typed codecs for `Data`, `Codable`, PNG, and JPEG artifacts.
+- Cache identity based on both `CacheKey` and `CacheCodec.identifier`.
+- Single-flight generation so concurrent requests for the same artifact share
+  work.
+- Disposable-cache failure semantics: corrupt stored artifacts can be treated as
+  misses and regenerated.
 
 ## Basic Usage
 
@@ -29,11 +47,17 @@ let summary: Summary = try await cache.codable(for: key) {
 }
 ```
 
-The public face should stay simple. Internally, standard conveniences are thin wrappers over codec-based APIs.
+The public API is intentionally small. Standard conveniences stay thin wrappers
+over the codec-based core, so the simple path and the extensible path share the
+same cache semantics.
 
-`YCache` is the root type. The `Y` comes from Yashima; supporting vocabulary stays descriptive with names like `CacheKey` and `CacheCodec`.
+`YCache` is the root type. The `Y` comes from Yashima; supporting vocabulary
+stays descriptive with names like `CacheKey` and `CacheCodec`.
 
-Image conveniences cache platform images as explicit PNG or JPEG data. On iOS they accept and return `UIImage`; on macOS they accept and return `NSImage`. The codec stores platform images through a small Sendable wrapper when used directly. The default JPEG quality is `0.85`.
+Image conveniences cache platform images as explicit PNG or JPEG data. On iOS
+they accept and return `UIImage`; on macOS they accept and return `NSImage`. The
+codec stores platform images through a small Sendable wrapper when used
+directly. The default JPEG quality is `0.85`.
 
 The codec-based core API is available first:
 
@@ -91,9 +115,46 @@ shows whether each read came from generation, memory, or storage. The sample is
 designed to demonstrate Yashima as a cache for locally generated app artifacts,
 not as a web image downloader.
 
+## Stress Testing
+
+Yashima includes an optional stress runner in [`StressTests`](StressTests). It is
+separate from the regular `swift test` suite so ordinary validation stays fast,
+while larger changes can be checked against heavier async and file-backed
+workloads.
+
+The stress runner uses deterministic synthetic data and validates correctness
+under:
+
+- single-flight bursts where many tasks request the same missing artifact;
+- mixed `Data`, `Codable`, PNG, and JPEG artifact generation;
+- lifecycle churn across refresh, lookup, metadata, removal, and namespace
+  removal;
+- storage quota pressure, exact-capacity replacement, and oversized-entry
+  cleanup;
+- recoverable corruption and cancellation churn.
+
+```sh
+swift run --package-path StressTests YashimaStressRunner --profile smoke
+```
+
+For larger behavior changes, run the broader local profile:
+
+```sh
+swift run --package-path StressTests YashimaStressRunner --profile standard
+```
+
+The stress runner is not a benchmark claim. It is designed to catch correctness
+regressions in the parts of a cache engine that are hardest to cover with small
+unit tests: concurrency, disk-backed storage, trimming, corruption recovery, and
+regeneration.
+
 ## Status
 
-The cache identity, memory store, storage store, core engine, codec-based `YCache` public API, standard codecs, lifecycle APIs, storage trimming, failure policies, and README-first convenience helpers are implemented with Swift Testing coverage.
+The cache identity, memory store, storage store, core engine, codec-based
+`YCache` public API, standard codecs, lifecycle APIs, storage trimming, failure
+policies, and README-first convenience helpers are implemented with Swift
+Testing coverage. A separate stress runner exercises concurrency and storage
+edge cases with synthetic workloads.
 
 ## Design Notes
 
@@ -104,6 +165,9 @@ The cache identity, memory store, storage store, core engine, codec-based `YCach
 - `CacheKey` + codec identifier as the effective cache entry identity.
 - Explicit invalidation, storage usage, and quota-based storage trimming.
 - Cache semantics: values may disappear, but values returned by the cache must match their key, codec, and metadata.
+- Swift Concurrency-first does not mean all disk I/O is non-blocking. Yashima
+  keeps the public API async and actor-based while using Foundation file I/O
+  under the hood.
 
 ## Requirements
 
