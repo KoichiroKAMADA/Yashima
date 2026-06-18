@@ -251,6 +251,43 @@ regressions in the parts of a cache engine that are hardest to cover with small
 unit tests: concurrency, disk-backed storage, trimming, corruption recovery, and
 regeneration.
 
+## Used in App Store Apps
+
+### Tracer
+
+<p align="center">
+  <img src="Documentation/Assets/tracer-yashima-scroll.gif" alt="Tracer scrolling through map artifacts cached by Yashima" width="360">
+</p>
+
+Yashima powers generated-artifact caching in Tracer, a location-recording app on
+the App Store. Tracer generates many local artifacts from recorded activity
+data: map snapshots, summaries, chart-ready data, and list previews that appear
+while the user scrolls through logs and revisits past records.
+
+<p align="center">
+  <a href="https://apps.apple.com/us/app/tracer-easy-location-logger/id1136146951">
+    <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83" alt="Download on the App Store" height="40">
+  </a>
+</p>
+
+Those artifacts are expensive enough that repeatedly generating them on every
+scroll, refresh, or screen transition would make the experience feel heavy.
+Yashima turns cache hits into the normal path: generated results can be reused
+from memory or storage, concurrent requests for the same artifact can share
+work, and UI-driven generation can be cancelled when there are no remaining
+waiters.
+
+That production workload is the kind of problem Yashima is built for. It is not
+a demo-only image cache; it is an App Store-grade cache engine for local results
+that are safe to regenerate but too costly to recreate every time. The recording
+above uses demo data from a Yashima-backed Tracer build.
+
+### Share Your App
+
+If you use Yashima in an app that is available on the App Store, please let the
+project know. This section can feature apps built with Yashima as adoption
+examples.
+
 ## Status
 
 The cache identity, memory store, storage store, core engine, codec-based
