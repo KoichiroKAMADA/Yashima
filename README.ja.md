@@ -192,6 +192,30 @@ swift run --package-path StressTests YashimaStressRunner --profile standard
 
 stress runner はベンチマーク結果を主張するためのものではありません。小さな unit test だけでは覆いにくい、並行性、ディスク保存、trim、破損回復、再生成の正しさを退行検出するための仕組みです。
 
+## 採用アプリ
+
+### Tracer
+
+<p align="center">
+  <img src="Documentation/Assets/tracer-yashima-scroll.gif" alt="Yashima がキャッシュした地図アーティファクトを Tracer でスクロールしている画面" width="360">
+</p>
+
+Yashima は、App Store の位置情報記録アプリ Tracer で、生成アーティファクトのキャッシュ基盤として使われています。Tracer は記録されたアクティビティデータから、多数の地図スナップショット、サマリー、グラフ用データ、一覧プレビューをローカルで生成します。これらはログ一覧のスクロールや、過去の記録を開き直す場面で繰り返し必要になります。
+
+<p align="center">
+  <a href="https://apps.apple.com/jp/app/tracer-%E3%81%8B%E3%82%93%E3%81%9F%E3%82%93%E4%BD%8D%E7%BD%AE%E8%A8%98%E9%8C%B2/id1136146951">
+    <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/ja-jp?size=250x83" alt="Download on the App Store" height="40">
+  </a>
+</p>
+
+こうした生成物をスクロール、更新、画面遷移のたびに毎回作り直すと、体験は重くなってしまいます。Yashima は、生成済みの結果をメモリまたはストレージから再利用し、同じアーティファクトへの並行リクエストでは生成処理を共有し、UI 側で待ち手がいなくなった生成はキャンセルできるようにします。
+
+このような実アプリのワークロードこそ、Yashima が想定している用途です。Yashima はデモ専用の画像キャッシュではありません。再生成はできるが、毎回作り直すには高コストなローカル生成物を扱うための、App Store 品質のキャッシュエンジンです。上の録画は、Yashima を組み込んだ Tracer のビルドで、デモデータを使っています。
+
+### あなたのアプリも紹介できます
+
+Yashima を利用していて、App Store で公開されているアプリがあれば、ぜひお知らせください。このセクションで採用事例として紹介させていただきます。
+
 ## 状態
 
 キャッシュ ID、メモリストア、ストレージストア、コアエンジン、codec ベースの `YCache` 公開 API、標準 codec、README で紹介している convenience helper は実装済みで、Swift Testing によるテストも用意されています。さらに、並行性、キャンセル、ストレージ境界を合成ワークロードで検証する stress runner も用意しています。
