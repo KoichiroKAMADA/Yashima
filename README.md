@@ -39,13 +39,13 @@ generation.
 Yashima is distributed as a Swift Package. In Xcode, add this repository from
 File > Add Package Dependencies.
 
-For `Package.swift`, use the `0.2.x` release line while Yashima is pre-1.0:
+For `Package.swift`, use the `0.3.x` release line while Yashima is pre-1.0:
 
 ```swift
 dependencies: [
     .package(
         url: "https://github.com/KoichiroKAMADA/Yashima.git",
-        .upToNextMinor(from: "0.2.0")
+        .upToNextMinor(from: "0.3.0")
     ),
 ]
 ```
@@ -92,7 +92,7 @@ Report:
 3. What cache keys and codecs should be used.
 4. What should not be cached with Yashima.
 5. The main risks: stale cache keys, privacy-sensitive data, disk usage, and cancellation behavior.
-6. A minimal Swift Package Manager integration plan using version 0.2.0.
+6. A minimal Swift Package Manager integration plan using version 0.3.0.
 
 Do not add the dependency or edit code yet. First explain the expected benefit,
 risks, and smallest safe integration plan.
@@ -139,6 +139,29 @@ let report = try await reports.value(for: key) {
 let immediate = try await reports.peek(for: key)
 ```
 
+## Optional Artifacts
+
+Some generators legitimately have no artifact to return. For example, a video
+thumbnail request may fail because the source file disappeared, or a photo
+thumbnail request may decide that no displayable image is available.
+
+Use `optionalValue`, `optionalJPEG`, or `optionalPNG` for those cases:
+
+```swift
+let thumbnail = try await cache.optionalJPEG(
+    for: key,
+    options: .uiLifecycle
+) {
+    try await renderThumbnailIfAvailable()
+}
+```
+
+`nil` means "no artifact", not "a negative cache entry". Yashima does not store
+`nil`, `CancellationError`, or thrown failures. If several callers miss the same
+key at the same time, optional generation still participates in single-flight:
+one producer runs, successful values are stored, and `nil` is shared with the
+current waiters without being persisted.
+
 ## Designing Cache Keys
 
 The most important part of any cache is the key. Yashima can make storage,
@@ -181,6 +204,26 @@ their `CacheKey` should be different. If the key is right, cached values may be
 evicted and regenerated, but they should never be the wrong artifact for the
 request.
 
+For video thumbnails, keep absolute paths and raw file URLs out of keys and
+logs. Prefer a stable app-level identity plus the inputs that can change the
+thumbnail:
+
+```swift
+let key = CacheKey(namespace: "video-thumbnails", identity: videoIdentity)
+    .variant("fileSize", fileSize)
+    .variant("createdAt", createdAt.timeIntervalSince1970)
+    .variant("modifiedAt", modifiedAt.timeIntervalSince1970)
+    .variant("second", thumbnailSecond)
+    .variant("pixels", "\(pixelWidth)x\(pixelHeight)")
+    .variant("scale", scale)
+    .variant("crop", "center-square")
+    .version("renderer", 1)
+```
+
+Use the asset timeline position you render, such as `thumbnailSecond`; do not
+include wall-clock request or generation time unless that time truly changes the
+artifact bytes.
+
 ## Default Cache Budgets
 
 By default, `YCache` uses a 64 MiB memory budget and a 128 MiB storage budget.
@@ -221,17 +264,24 @@ same key share one producer, and the producer continues even if one waiter is
 cancelled. This keeps existing get-or-generate code predictable.
 
 For UI lifecycle work such as scrolling cells, thumbnails, MapKit snapshots, or
-chart snapshots, use `cancelWhenNoWaiters` so work stops when nothing on screen
-is still waiting for it:
+chart snapshots, use the `uiLifecycle` preset so work stops when nothing on
+screen is still waiting for it:
 
 ```swift
-let options = YCache.Options(singleFlightPolicy: .cancelWhenNoWaiters)
-
-let snapshot = try await cache.png(for: key, options: options) {
+let snapshot = try await cache.png(for: key, options: .uiLifecycle) {
     try Task.checkCancellation()
     return try await renderSnapshot()
 }
 ```
+
+`YCache.Options.uiLifecycle` combines
+`singleFlightPolicy: .cancelWhenNoWaiters` with
+`writeFailurePolicy: .bestEffort`. Use the default `.share` behavior for
+background work, detail screens, exports, or any generation where completing the
+producer still has value after the original caller disappears.
+Because it uses `.bestEffort`, a storage write failure silently degrades to a
+memory-only result when memory writes are enabled; generator failures still
+throw.
 
 Yashima separates waiter cancellation from producer cancellation. If one waiter
 is cancelled while other waiters remain, the producer keeps running for the
@@ -243,6 +293,88 @@ own task is cancelled.
 
 Use `.disabled` only when each caller should run an independent generation even
 for the same key.
+
+## iOS Recipes
+
+Yashima core does not import AVFoundation, PhotoKit, SwiftUI, or app-specific
+thumbnail generators. Those producers belong in your app or in a separate
+adapter package. Yashima's job is to cache the generated `Data`, `Codable`, PNG,
+or JPEG values with predictable key, single-flight, and cancellation semantics.
+
+For a SwiftUI cell or grid item, bind the caller task to the view lifecycle with
+`.task(id:)`, use `.uiLifecycle`, and check identity before assigning the image
+back to state:
+
+```swift
+.task(id: videoID) {
+    let requestID = videoID
+    let image = try? await cache.optionalJPEG(for: key, options: .uiLifecycle) {
+        try await renderVideoThumbnail()
+    }
+
+    guard !Task.isCancelled, requestID == videoID else { return }
+    thumbnailImage = image
+}
+```
+
+Avoid starting unstructured tasks from `.onAppear { Task { ... } }` for
+scrolling cells. They are easier to accidentally outlive the view that requested
+the artifact.
+
+For AVFoundation thumbnails, prefer the async `AVAssetImageGenerator.image(at:)`
+API on supported OS versions and connect task cancellation to the producer:
+
+```swift
+let generator = AVAssetImageGenerator(asset: asset)
+let time = CMTime(seconds: thumbnailSecond, preferredTimescale: 600)
+
+let cgImage = try await withTaskCancellationHandler {
+    let result = try await generator.image(at: time)
+    return result.image
+} onCancel: {
+    generator.cancelAllCGImageGeneration()
+}
+```
+
+If your app still uses `copyCGImage(at:actualTime:)`, remember that it is a
+synchronous API. Checking task cancellation before and after the call is useful,
+but it cannot guarantee immediate interruption while the synchronous generation
+is already running.
+
+For PhotoKit thumbnails, keep the key tied to the `PHAsset` identity and the
+requested representation, not to a transient `UIImage`:
+
+```swift
+let key = CacheKey(namespace: "photo-thumbnails", identity: asset.localIdentifier)
+    .variant("pixels", "\(pixelWidth)x\(pixelHeight)")
+    .variant("contentMode", "aspectFill")
+    .variant("deliveryMode", "highQuality")
+    .version("renderer", 1)
+```
+
+`PHImageManager` may deliver more than one result depending on request options.
+Cache the final representation that matches your key, or include the quality
+level in the key. If the surrounding task is cancelled, cancel the Photos
+request by keeping the `PHImageRequestID` returned from `requestImage` and
+passing it to `cancelImageRequest(_:)`. Avoid synchronous PhotoKit requests for
+UI lifecycle work because they cannot be cancelled once started.
+
+For small derived values such as video duration, use a separate namespace and a
+`Codable` value:
+
+```swift
+let key = CacheKey(namespace: "video-durations", identity: videoIdentity)
+    .variant("durationSource", "asset-metadata")
+    .version("schema", 1)
+
+let duration: Double = try await cache.codable(for: key) {
+    try await loadDuration()
+}
+```
+
+Keep image thumbnails and small metadata in different namespaces, such as
+`video-thumbnails`, `photo-thumbnails`, `video-durations`, or `video-metadata`,
+so cache clearing and future budget tuning stay understandable.
 
 ## Cache Lifecycle
 

@@ -96,37 +96,21 @@ public final class YCache: Sendable {
         options: Options = .default,
         _ generator: @escaping @Sendable () async throws -> C.Value?
     ) async throws -> C.Value? {
-        switch options.lookupPolicy {
-        case .normal:
-            if let cached = try await resolvedIfCached(
+        do {
+            return try await value(
                 for: key,
                 codec: codec,
                 options: options
-            )?.value {
-                return cached
+            ) {
+                guard let value = try await generator() else {
+                    throw OptionalGenerationReturnedNil()
+                }
+                return value
             }
-        case .cacheOnly:
-            return try await resolvedIfCached(
-                for: key,
-                codec: codec,
-                options: options
-            )?.value
-        case .refresh:
-            break
-        }
-
-        guard let value = try await generator() else {
+        } catch is OptionalGenerationReturnedNil {
             return nil
-        }
-
-        var generationOptions = options
-        generationOptions.lookupPolicy = .refresh
-        return try await self.value(
-            for: key,
-            codec: codec,
-            options: generationOptions
-        ) {
-            value
+        } catch Error.cacheMiss where options.lookupPolicy == .cacheOnly {
+            return nil
         }
     }
 
@@ -263,6 +247,10 @@ extension YCache {
         }
 
         public static let `default` = Options()
+        public static let uiLifecycle = Options(
+            writeFailurePolicy: .bestEffort,
+            singleFlightPolicy: .cancelWhenNoWaiters
+        )
     }
 
     public struct Resolved<Value: Sendable>: Sendable {
@@ -495,6 +483,10 @@ private extension YCache {
         }
     }
 }
+
+// Private sentinel used only to route a nil optional generator result through
+// the normal value pipeline, so it can reuse single-flight and cancellation.
+private struct OptionalGenerationReturnedNil: Error {}
 
 private extension YCache.Configuration {
     var memoryLimits: MemoryCacheStore.Limits {

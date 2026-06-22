@@ -30,13 +30,13 @@ Yashima は、再生成可能だが生成コストの高いローカル結果の
 
 Yashima は Swift Package として配布されます。Xcode では File > Add Package Dependencies からこのリポジトリを追加します。
 
-`Package.swift` で指定する場合、Yashima が 1.0 に到達するまでは `0.2.x` 系を使います。
+`Package.swift` で指定する場合、Yashima が 1.0 に到達するまでは `0.3.x` 系を使います。
 
 ```swift
 dependencies: [
     .package(
         url: "https://github.com/KoichiroKAMADA/Yashima.git",
-        .upToNextMinor(from: "0.2.0")
+        .upToNextMinor(from: "0.3.0")
     ),
 ]
 ```
@@ -74,7 +74,7 @@ https://github.com/KoichiroKAMADA/Yashima
 3. どのような CacheKey と Codec を使うべきか。
 4. Yashima でキャッシュすべきでないものは何か。
 5. 主なリスク。古い cache key、プライバシーに関わるデータ、ディスク使用量、キャンセル挙動を確認してください。
-6. バージョン 0.2.0 を前提にした、最小限の Swift Package Manager 導入案。
+6. バージョン 0.3.0 を前提にした、最小限の Swift Package Manager 導入案。
 
 まだ依存関係の追加やコード編集は行わず、期待できる効果、リスク、最小の安全な導入計画を先に説明してください。
 ```
@@ -114,6 +114,23 @@ let report = try await reports.value(for: key) {
 let immediate = try await reports.peek(for: key)
 ```
 
+## Optional な生成物
+
+生成処理によっては、正当な結果として「返せるアーティファクトがない」ことがあります。たとえば、動画サムネイル生成中に元ファイルが消えた場合や、写真サムネイルとして表示できる画像がないと判断した場合です。
+
+そのような用途では、`optionalValue`、`optionalJPEG`、`optionalPNG` を使います。
+
+```swift
+let thumbnail = try await cache.optionalJPEG(
+    for: key,
+    options: .uiLifecycle
+) {
+    try await renderThumbnailIfAvailable()
+}
+```
+
+`nil` は「生成物なし」を表すだけで、negative cache entry ではありません。Yashima は `nil`、`CancellationError`、throw された失敗を保存しません。同じ key への miss が同時に発生した場合でも、optional な生成は single-flight の対象になります。1 つの producer だけが走り、値が返った場合は保存され、`nil` の場合は現在の waiter にだけ共有されて永続化されません。
+
 ## CacheKey の設計
 
 キャッシュで最も重要なのは key です。Yashima はストレージ、メモリ、並行生成を扱いやすくしますが、生成物が何に依存しているのかは、アプリ側が正しく表現する必要があります。
@@ -140,6 +157,22 @@ let key = CacheKey(namespace: "summary-maps", identity: summaryID)
 よい key は、必ずしも長い key ではありません。ただし、完全な key である必要があります。サイズ、scale、appearance、locale、renderer option、元データの revision、そして大きな入力を要約した安定 digest など、生成結果を変え得る入力を含めます。永続的なキャッシュ ID には Swift の `hashValue` や `Hasher` を使わないでください。ルート、チャートのデータセット、レンダリング対象のドキュメントなど、大きな入力を要約したい場合は SHA-256 のような安定 digest を使います。
 
 判断基準はシンプルです。2 回の生成で違う bytes ができる可能性があるなら、`CacheKey` も違うべきです。key が正しければ、キャッシュ値は消えたり再生成されたりしても、要求と違う生成物が返ることはありません。
+
+動画サムネイルでは、絶対パスや raw file URL を key や public log に入れないでください。アプリ側で安定した identity を用意し、そのうえでサムネイル結果を変え得る入力を variant として含めます。
+
+```swift
+let key = CacheKey(namespace: "video-thumbnails", identity: videoIdentity)
+    .variant("fileSize", fileSize)
+    .variant("createdAt", createdAt.timeIntervalSince1970)
+    .variant("modifiedAt", modifiedAt.timeIntervalSince1970)
+    .variant("second", thumbnailSecond)
+    .variant("pixels", "\(pixelWidth)x\(pixelHeight)")
+    .variant("scale", scale)
+    .variant("crop", "center-square")
+    .version("renderer", 1)
+```
+
+`thumbnailSecond` のような素材のタイムライン上の位置は key に含めます。一方で、その時刻が生成物の bytes を本当に変えるのでない限り、リクエスト時刻や生成時刻のような wall-clock time は key に含めないでください。
 
 ## デフォルトのキャッシュ容量
 
@@ -172,22 +205,86 @@ let cache = YCache(
 
 デフォルトの single-flight は互換性を重視した挙動です。同じ key への並行リクエストは 1 つの producer を共有し、1 つの waiter がキャンセルされても producer は継続します。
 
-スクロール中のセル、サムネイル、MapKit snapshot、チャート snapshot のように、画面から消えた caller が待つ必要のない用途では、`cancelWhenNoWaiters` を指定します。
+スクロール中のセル、サムネイル、MapKit snapshot、チャート snapshot のように、画面から消えた caller が待つ必要のない用途では、`uiLifecycle` preset を使います。
 
 ```swift
-let options = YCache.Options(singleFlightPolicy: .cancelWhenNoWaiters)
-
-let snapshot = try await cache.png(for: key, options: options) {
+let snapshot = try await cache.png(for: key, options: .uiLifecycle) {
     try Task.checkCancellation()
     return try await renderSnapshot()
 }
 ```
+
+`YCache.Options.uiLifecycle` は、`singleFlightPolicy: .cancelWhenNoWaiters` と `writeFailurePolicy: .bestEffort` を組み合わせた preset です。background 処理、detail 画面、export、生成が完了すること自体に意味がある処理では、既定の `.share` のまま使うことをおすすめします。
+
+`.bestEffort` を含むため、storage write failure は、memory write が有効であれば memory-only の結果へ静かに degrade します。generator 自体の失敗は通常どおり throw されます。
 
 Yashima は waiter のキャンセルと producer のキャンセルを分けて扱います。1 つの waiter だけがキャンセルされ、他の waiter が残っている場合、producer は残りの caller のために継続します。すべての waiter がキャンセルされた場合、Yashima は producer をキャンセルし、in-flight entry を取り除き、キャンセルされた生成結果を保存しません。
 
 ただし、生成処理の中身は generator 側の責任です。時間のかかる renderer は `Task.checkCancellation()` を確認し、必要であれば snapshotter など下層の処理もキャンセルしてください。
 
 同じ key でも caller ごとに独立して生成させたい場合だけ、`.disabled` を使います。
+
+## iOS 向け recipe
+
+Yashima core は AVFoundation、PhotoKit、SwiftUI、アプリ固有のサムネイル生成器を import しません。そうした producer はアプリ側、または別の adapter package の責務です。Yashima は、生成済みの `Data`、`Codable`、PNG、JPEG 値を、予測しやすい key、single-flight、キャンセル意味論でキャッシュすることに集中します。
+
+SwiftUI のセルやグリッドでは、`.task(id:)` で caller task を view lifecycle に結びつけ、`.uiLifecycle` を使い、state に反映する直前に identity を確認します。
+
+```swift
+.task(id: videoID) {
+    let requestID = videoID
+    let image = try? await cache.optionalJPEG(for: key, options: .uiLifecycle) {
+        try await renderVideoThumbnail()
+    }
+
+    guard !Task.isCancelled, requestID == videoID else { return }
+    thumbnailImage = image
+}
+```
+
+スクロールするセルでは、`.onAppear { Task { ... } }` から非構造化 task を開始する形はおすすめしません。要求元の view よりも task が長生きしやすく、古いセルへ別の生成結果を反映してしまう事故を招きやすくなります。
+
+AVFoundation のサムネイルでは、対応 OS では async な `AVAssetImageGenerator.image(at:)` を優先し、task cancellation を producer に接続します。
+
+```swift
+let generator = AVAssetImageGenerator(asset: asset)
+let time = CMTime(seconds: thumbnailSecond, preferredTimescale: 600)
+
+let cgImage = try await withTaskCancellationHandler {
+    let result = try await generator.image(at: time)
+    return result.image
+} onCancel: {
+    generator.cancelAllCGImageGeneration()
+}
+```
+
+`copyCGImage(at:actualTime:)` を使う場合、その API は同期処理です。呼び出し前後で task cancellation を確認することには意味がありますが、同期生成が始まった後に即座に中断できるとは限りません。
+
+PhotoKit のサムネイルでは、key を一時的な `UIImage` ではなく、`PHAsset` の identity と要求する表現に結びつけます。
+
+```swift
+let key = CacheKey(namespace: "photo-thumbnails", identity: asset.localIdentifier)
+    .variant("pixels", "\(pixelWidth)x\(pixelHeight)")
+    .variant("contentMode", "aspectFill")
+    .variant("deliveryMode", "highQuality")
+    .version("renderer", 1)
+```
+
+`PHImageManager` は request options によって複数回 result を返すことがあります。key に対応する最終的な表現だけをキャッシュするか、品質段階を key に含めてください。周囲の task がキャンセルされた場合は、`requestImage` が返す `PHImageRequestID` を保持し、`cancelImageRequest(_:)` に渡して Photos 側の request もキャンセルします。UI lifecycle に結びつく用途では、開始後にキャンセルできない同期 PhotoKit request は避けることをおすすめします。
+
+動画の duration のような小さな派生値は、画像とは別 namespace で `Codable` として扱います。
+
+```swift
+let key = CacheKey(namespace: "video-durations", identity: videoIdentity)
+    .variant("durationSource", "asset-metadata")
+    .version("schema", 1)
+
+let duration: Double = try await cache.codable(for: key) {
+    try await loadDuration()
+}
+```
+
+サムネイル画像と小さなメタデータは、`video-thumbnails`、`photo-thumbnails`、`video-durations`、`video-metadata` のように namespace を分けておくと、キャッシュクリアや将来の容量調整を理解しやすくなります。
 
 ## キャッシュのライフサイクル
 

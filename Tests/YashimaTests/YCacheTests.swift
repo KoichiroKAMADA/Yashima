@@ -43,10 +43,13 @@ import Yashima
 @Test func yCacheOptionsExposeSingleFlightPolicy() {
     let defaultOptions = YCache.Options()
     let uiLifecycleOptions = YCache.Options(singleFlightPolicy: .cancelWhenNoWaiters)
+    let uiLifecyclePreset = YCache.Options.uiLifecycle
     let disabledOptions = YCache.Options(singleFlightPolicy: .disabled)
 
     #expect(defaultOptions.singleFlightPolicy == .share)
     #expect(uiLifecycleOptions.singleFlightPolicy == .cancelWhenNoWaiters)
+    #expect(uiLifecyclePreset.writeFailurePolicy == .bestEffort)
+    #expect(uiLifecyclePreset.singleFlightPolicy == .cancelWhenNoWaiters)
     #expect(disabledOptions.singleFlightPolicy == .disabled)
 }
 
@@ -422,6 +425,255 @@ import Yashima
     }
 }
 
+@Test func yCacheOptionalValueCoalescesConcurrentMisses() async throws {
+    try await withYCache { cache, _ in
+        let key = yCacheKey("optional-single-flight")
+        let codec = PublicUTF8StringCodec()
+        let counter = YCacheCallCounter()
+
+        let values = try await withThrowingTaskGroup(of: String?.self) { group in
+            for _ in 0..<20 {
+                group.addTask {
+                    try await cache.optionalValue(for: key, codec: codec) {
+                        let invocation = await counter.increment()
+                        try await Task.sleep(nanoseconds: 100_000_000)
+                        return "shared-\(invocation)"
+                    }
+                }
+            }
+
+            var values: [String?] = []
+            for try await value in group {
+                values.append(value)
+            }
+            return values
+        }
+
+        let cached = try await cache.valueIfCached(for: key, codec: codec)
+
+        #expect(values.count == 20)
+        #expect(values.allSatisfy { $0 == "shared-1" })
+        #expect(cached == "shared-1")
+        #expect(await counter.count == 1)
+    }
+}
+
+@Test func yCacheOptionalValueCoalescesConcurrentNilAndDoesNotCacheIt() async throws {
+    try await withYCache { cache, _ in
+        let key = yCacheKey("optional-single-flight-nil")
+        let codec = PublicUTF8StringCodec()
+        let counter = YCacheCallCounter()
+
+        let values = try await withThrowingTaskGroup(of: String?.self) { group in
+            for _ in 0..<20 {
+                group.addTask {
+                    try await cache.optionalValue(for: key, codec: codec) {
+                        _ = await counter.increment()
+                        try await Task.sleep(nanoseconds: 100_000_000)
+                        return nil
+                    }
+                }
+            }
+
+            var values: [String?] = []
+            for try await value in group {
+                values.append(value)
+            }
+            return values
+        }
+
+        let cached = try await cache.valueIfCached(for: key, codec: codec)
+
+        #expect(values.count == 20)
+        #expect(values.allSatisfy { $0 == nil })
+        #expect(cached == nil)
+        #expect(await counter.count == 1)
+    }
+}
+
+@Test func yCacheOptionalValueSequentialNilMissesRerunGenerator() async throws {
+    try await withYCache { cache, _ in
+        let key = yCacheKey("optional-sequential-nil")
+        let codec = PublicUTF8StringCodec()
+        let counter = YCacheCallCounter()
+
+        let first = try await cache.optionalValue(for: key, codec: codec) {
+            _ = await counter.increment()
+            return nil
+        }
+        let second = try await cache.optionalValue(for: key, codec: codec) {
+            _ = await counter.increment()
+            return nil
+        }
+        let cached = try await cache.valueIfCached(for: key, codec: codec)
+
+        #expect(first == nil)
+        #expect(second == nil)
+        #expect(cached == nil)
+        #expect(await counter.count == 2)
+    }
+}
+
+@Test func yCacheOptionalValuePropagatesGeneratorCacheMiss() async throws {
+    try await withYCache { cache, _ in
+        let key = yCacheKey("optional-propagates-cache-miss")
+        let codec = PublicUTF8StringCodec()
+
+        do {
+            let _: String? = try await cache.optionalValue(for: key, codec: codec) {
+                throw YCache.Error.cacheMiss
+            }
+            Issue.record("Expected generator cacheMiss to propagate.")
+        } catch YCache.Error.cacheMiss {
+        } catch {
+            Issue.record("Expected cacheMiss, got \(error).")
+        }
+
+        let cached = try await cache.valueIfCached(for: key, codec: codec)
+        #expect(cached == nil)
+    }
+}
+
+@Test func yCacheOptionalValueCacheOnlyDoesNotGenerate() async throws {
+    try await withYCache { cache, _ in
+        let key = yCacheKey("optional-cache-only")
+        let codec = PublicUTF8StringCodec()
+        let counter = YCacheCallCounter()
+
+        let missing = try await cache.optionalValue(
+            for: key,
+            codec: codec,
+            options: .init(lookupPolicy: .cacheOnly)
+        ) {
+            _ = await counter.increment()
+            return "should-not-run"
+        }
+
+        #expect(missing == nil)
+        #expect(await counter.count == 0)
+    }
+}
+
+@Test func yCacheOptionalValueRefreshBypassesCacheAndStoresReturnedValue() async throws {
+    try await withYCache { cache, _ in
+        let key = yCacheKey("optional-refresh")
+        let codec = PublicUTF8StringCodec()
+        let counter = YCacheCallCounter()
+
+        try await cache.store("old", for: key, codec: codec)
+        let refreshed = try await cache.optionalValue(
+            for: key,
+            codec: codec,
+            options: .init(lookupPolicy: .refresh)
+        ) {
+            let invocation = await counter.increment()
+            return "new-\(invocation)"
+        }
+        let cached = try await cache.valueIfCached(for: key, codec: codec)
+
+        #expect(refreshed == "new-1")
+        #expect(cached == "new-1")
+        #expect(await counter.count == 1)
+    }
+}
+
+@Test func yCacheOptionalValueDisabledSingleFlightRunsIndependentGenerators() async throws {
+    try await withYCache { cache, _ in
+        let key = yCacheKey("optional-disabled")
+        let codec = PublicUTF8StringCodec()
+        let counter = YCacheCallCounter()
+        let gate = YCacheAsyncGate()
+        let taskCount = 6
+        let options = YCache.Options(
+            lookupPolicy: .refresh,
+            singleFlightPolicy: .disabled
+        )
+
+        let values = try await withThrowingTaskGroup(of: String?.self) { group in
+            for _ in 0..<taskCount {
+                group.addTask {
+                    try await cache.optionalValue(for: key, codec: codec, options: options) {
+                        let invocation = await counter.increment()
+                        if invocation == taskCount {
+                            await gate.open()
+                        }
+                        await gate.wait()
+                        return "generated-\(invocation)"
+                    }
+                }
+            }
+
+            var values: [String?] = []
+            for try await value in group {
+                values.append(value)
+            }
+            return values
+        }
+
+        #expect(values.count == taskCount)
+        #expect(Set(values.compactMap { $0 }).count == taskCount)
+        #expect(await counter.count == taskCount)
+    }
+}
+
+@Test func yCacheOptionalValueCancellationDoesNotCacheGeneratedValue() async throws {
+    try await withYCache { cache, _ in
+        let key = yCacheKey("optional-cancelled")
+        let codec = PublicUTF8StringCodec()
+        let counter = YCacheCallCounter()
+        let probe = YCacheCancellationProbe()
+
+        let first = Task {
+            try await cache.optionalValue(
+                for: key,
+                codec: codec,
+                options: .uiLifecycle
+            ) {
+                _ = await counter.increment()
+                do {
+                    while true {
+                        try await Task.sleep(nanoseconds: 10_000_000)
+                    }
+                } catch is CancellationError {
+                    await probe.markObserved()
+                    throw CancellationError()
+                }
+            }
+        }
+        await counter.waitUntil(1)
+
+        let second = Task {
+            try await cache.optionalValue(
+                for: key,
+                codec: codec,
+                options: .uiLifecycle
+            ) {
+                _ = await counter.increment()
+                do {
+                    while true {
+                        try await Task.sleep(nanoseconds: 10_000_000)
+                    }
+                } catch is CancellationError {
+                    await probe.markObserved()
+                    throw CancellationError()
+                }
+            }
+        }
+
+        try await Task.sleep(nanoseconds: 20_000_000)
+        first.cancel()
+        second.cancel()
+
+        await expectCancellation(from: first)
+        await expectCancellation(from: second)
+        try await probe.waitUntilObserved()
+
+        let cached = try await cache.valueIfCached(for: key, codec: codec)
+        #expect(cached == nil)
+        #expect(await counter.count == 1)
+    }
+}
+
 @Test func yCacheDefaultMemoryHasNoEntryCountLimit() async throws {
     try await withYCache { cache, _ in
         let codec = DataCodec()
@@ -560,11 +812,13 @@ private struct PublicThrowingDecodeStringCodec: CacheCodec {
 
 private enum PublicCodecTestError: Error {
     case decode
+    case timeout
     case unexpectedGeneration
 }
 
 private actor YCacheCallCounter {
     private var value = 0
+    private var waiters: [(target: Int, continuation: CheckedContinuation<Void, Never>)] = []
 
     var count: Int {
         value
@@ -573,7 +827,113 @@ private actor YCacheCallCounter {
     @discardableResult
     func increment() -> Int {
         value += 1
+        resumeSatisfiedWaiters()
         return value
+    }
+
+    func waitUntil(_ target: Int) async {
+        guard value < target else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            waiters.append((target: target, continuation: continuation))
+        }
+    }
+
+    private func resumeSatisfiedWaiters() {
+        var remaining: [(target: Int, continuation: CheckedContinuation<Void, Never>)] = []
+        for waiter in waiters {
+            if value >= waiter.target {
+                waiter.continuation.resume()
+            } else {
+                remaining.append(waiter)
+            }
+        }
+        waiters = remaining
+    }
+}
+
+private actor YCacheAsyncGate {
+    private var isOpen = false
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        guard !isOpen else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            continuations.append(continuation)
+        }
+    }
+
+    func open() {
+        guard !isOpen else {
+            return
+        }
+
+        isOpen = true
+        let continuations = continuations
+        self.continuations.removeAll()
+        for continuation in continuations {
+            continuation.resume()
+        }
+    }
+}
+
+private actor YCacheCancellationProbe {
+    private var observed = false
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+
+    func markObserved() {
+        guard !observed else {
+            return
+        }
+
+        observed = true
+        let continuations = continuations
+        self.continuations.removeAll()
+        for continuation in continuations {
+            continuation.resume()
+        }
+    }
+
+    func waitUntilObserved() async throws {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                await self.wait()
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: 1_000_000_000)
+                throw PublicCodecTestError.timeout
+            }
+
+            _ = try await group.next()
+            group.cancelAll()
+        }
+    }
+
+    private func wait() async {
+        guard !observed else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            continuations.append(continuation)
+        }
+    }
+}
+
+private func expectCancellation<T>(
+    from task: Task<T, any Error>
+) async {
+    do {
+        _ = try await task.value
+        Issue.record("Expected task to throw CancellationError.")
+    } catch is CancellationError {
+    } catch {
+        Issue.record("Expected CancellationError, got \(error).")
     }
 }
 

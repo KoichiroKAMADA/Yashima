@@ -43,12 +43,18 @@ These APIs are intended to be the first touch points in README examples.
 
 - `jpeg(for:_:)`
 - `jpeg(for:quality:_:)`
+- `jpeg(for:quality:options:_:)`
 - `optionalJPEG(for:quality:_:)`
+- `optionalJPEG(for:quality:options:_:)`
 - `png(for:_:)`
+- `png(for:options:_:)`
 - `optionalPNG(for:_:)`
+- `optionalPNG(for:options:_:)`
 - `data(for:_:)`
+- `data(for:options:_:)`
 - `codable(for:_:)`
 - `codable(for:format:_:)`
+- `codable(for:format:options:_:)`
 
 Do not add per-type versions of every cross-cutting operation unless the added
 convenience removes real friction from common usage.
@@ -118,6 +124,23 @@ digest mismatches are detected on read.
 - `writeFailurePolicy`, default `.throwError`
 - `singleFlightPolicy`, default `.share`
 
+`YCache.Options.default` is the default option set.
+
+`YCache.Options.uiLifecycle` is the recommended preset for SwiftUI `List`,
+`LazyVGrid`, `.task(id:)`, scrolling cells, and other caller-lifetime-bound
+artifact generation. It currently means:
+
+- `writeFailurePolicy == .bestEffort`
+- `singleFlightPolicy == .cancelWhenNoWaiters`
+
+Because it uses `.bestEffort`, storage write failures fall back to memory-only
+results when memory writes are enabled. Generator failures, encode failures, and
+read failures still keep their normal error behavior.
+
+Keep `.default` / `.share` as the normal choice for background work, detail
+screens, exports, and generation where completing the producer still has value
+after the original caller disappears.
+
 When `cost` is omitted, `DataCodec` and `CodableCodec` use encoded byte count as
 their memory cost. `ImageCodec` estimates decoded bitmap memory instead of using
 the compressed PNG or JPEG byte count. When `cost` is provided, that explicit
@@ -149,6 +172,23 @@ Generator closures should be cancellation-aware when using
 `.cancelWhenNoWaiters`. Yashima can cancel the producer task and avoid storing a
 cancelled result, but long-running renderers still need to check cancellation or
 cancel their underlying work.
+
+`optionalValue(for:codec:options:_:)` uses the same lookup, single-flight, and
+producer cancellation path as `value(for:codec:options:_:)`.
+
+- If a cached value exists, it returns that value and does not run the generator.
+- If the generator returns a value, Yashima stores it according to the write
+  policy and returns it to the waiters.
+- If the generator returns `nil`, Yashima returns `nil` to current waiters and
+  does not store a negative cache entry.
+- If the generator throws or task cancellation wins, Yashima does not store an
+  entry.
+- With `.cancelWhenNoWaiters`, when all waiters are cancelled, the producer task
+  is cancelled and no cancelled result is stored.
+- With `.disabled`, each caller runs its own miss-generation path.
+
+`optionalJPEG` and `optionalPNG` are thin wrappers over that optional-value
+semantics.
 
 ## Typed Facade
 
@@ -187,5 +227,8 @@ only if the memory layer is explicitly designed for that guarantee.
 - Public stale/freshness policy
 - Public tag invalidation
 - Public predicate invalidation
+- Failure markers or negative-cache entries
+- AVFoundation thumbnail APIs
+- PhotoKit thumbnail APIs
 - URL loading
 - UI components
