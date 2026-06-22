@@ -30,6 +30,70 @@ generation.
 - Disposable-cache failure semantics: corrupt stored artifacts can be treated as
   misses and regenerated.
 
+## Installation
+
+Yashima is distributed as a Swift Package. In Xcode, add this repository from
+File > Add Package Dependencies.
+
+For `Package.swift`, use the `0.2.x` release line while Yashima is pre-1.0:
+
+```swift
+dependencies: [
+    .package(
+        url: "https://github.com/KoichiroKAMADA/Yashima.git",
+        .upToNextMinor(from: "0.2.0")
+    ),
+]
+```
+
+Then add the `Yashima` product to the target that generates and reuses local
+artifacts:
+
+```swift
+.target(
+    name: "YourApp",
+    dependencies: ["Yashima"]
+)
+```
+
+## Ask Your Coding Agent If Yashima Fits
+
+Yashima solves a narrow but high-impact problem: caching locally generated
+artifacts that are expensive to recreate.
+
+If your app repeatedly renders maps, thumbnails, charts, summaries, previews,
+or other deterministic local data while scrolling, navigating, launching, or
+revisiting screens, ask your AI coding agent to evaluate whether Yashima fits
+your project.
+
+Copy this prompt into your coding agent:
+
+```text
+Evaluate whether Yashima is a good fit for my Swift app.
+
+Yashima:
+https://github.com/KoichiroKAMADA/Yashima
+
+First, read Yashima's README and public API. Then inspect my project for places
+where the app repeatedly generates local artifacts such as map images,
+thumbnails, charts, summaries, previews, encoded data, rendered documents, or
+other deterministic results.
+
+Look especially for work that happens during scrolling, screen transitions,
+app launch, repeated navigation, or returning to previously viewed content.
+
+Report:
+1. Whether Yashima is a good fit for this project. If it is not a fit, say so.
+2. Which specific code paths could benefit from it.
+3. What cache keys and codecs should be used.
+4. What should not be cached with Yashima.
+5. The main risks: stale cache keys, privacy-sensitive data, disk usage, and cancellation behavior.
+6. A minimal Swift Package Manager integration plan using version 0.2.0.
+
+Do not add the dependency or edit code yet. First explain the expected benefit,
+risks, and smallest safe integration plan.
+```
+
 ## Basic Usage
 
 ```swift
