@@ -174,6 +174,31 @@ let key = CacheKey(namespace: "video-thumbnails", identity: videoIdentity)
 
 `thumbnailSecond` のような素材のタイムライン上の位置は key に含めます。一方で、その時刻が生成物の bytes を本当に変えるのでない限り、リクエスト時刻や生成時刻のような wall-clock time は key に含めないでください。
 
+## YCache インスタンスの共有
+
+一般的な iOS アプリでは、再生成可能な成果物キャッシュ用の `YCache` は、アプリ内で共有される 1 つの長寿命インスタンスとして持つことをおすすめします。小さな cache service、dependency container、actor、または `AppArtifactCache.shared` のような共有 owner に置く形で十分です。
+
+成果物の種類は、別々の `YCache` を作るのではなく、`CacheKey.namespace` で分けます。
+
+```swift
+enum AppArtifactCache {
+    static let shared = YCache(storageDirectory: cacheDirectory)
+}
+
+let thumbnailKey = CacheKey(namespace: "video-thumbnails", identity: videoID)
+let durationKey = CacheKey(namespace: "video-durations", identity: videoID)
+
+let thumbnail = try await AppArtifactCache.shared.jpeg(for: thumbnailKey) {
+    try await renderThumbnail()
+}
+
+let duration: Double = try await AppArtifactCache.shared.codable(for: durationKey) {
+    try await loadDuration()
+}
+```
+
+namespace は、1 つの cache の中で key や削除範囲を分けるための論理的な区分です。namespace ごとに別々の `YCache` を作る必要はありません。複数の `YCache` を作るのは、保存先ディレクトリ、容量ポリシー、ライフサイクル、セキュリティ境界、App Extension との境界、テスト/Preview 用の隔離ストアを明確に分けたい場合に限るのが基本です。複数の cache instance が同じ `storageDirectory` を指す設計になりそうな場合は、1 つの共有 instance にまとめることを優先してください。迷った場合は、1 つの共有 `YCache` と namespace の組み合わせを選んでください。
+
 ## デフォルトのキャッシュ容量
 
 `YCache` はデフォルトで、メモリ 64 MiB、ストレージ 128 MiB の容量上限を使います。メモリの entry 件数上限はデフォルトでは設定していません。そのため、小さなサムネイルを大量に扱う用途でも、任意の件数制限で早く追い出されず、容量上限の範囲でメモリを使えます。
@@ -284,7 +309,7 @@ let duration: Double = try await cache.codable(for: key) {
 }
 ```
 
-サムネイル画像と小さなメタデータは、`video-thumbnails`、`photo-thumbnails`、`video-durations`、`video-metadata` のように namespace を分けておくと、キャッシュクリアや将来の容量調整を理解しやすくなります。
+サムネイル画像と小さなメタデータは、`video-thumbnails`、`photo-thumbnails`、`video-durations`、`video-metadata` のように namespace を分けておくと、キャッシュクリアや将来の容量調整を理解しやすくなります。これらの namespace は、通常、同じ共有 `YCache` instance の中で使います。
 
 ## キャッシュのライフサイクル
 
