@@ -5,6 +5,7 @@
 
 # Swift Package Manager
 /.build
+**/.build/
 /Packages
 /.swiftpm/
 
@@ -15,6 +16,7 @@ xcuserdata/
 DerivedData/
 
 # Local operator notes. These are intentionally not part of the public repo.
+AGENTS.md
 /.local-notes/
 CLAUDE.local.md
 

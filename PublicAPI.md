@@ -1,6 +1,7 @@
-# Public API Draft
+# Public API
 
-This file tracks the intended public surface before implementation. Keep it small and review it before adding new symbols.
+This file tracks the implemented public surface for the first public release
+line. Keep it small and review it before adding new symbols.
 
 ## Core Types
 
@@ -49,7 +50,8 @@ These APIs are intended to be the first touch points in README examples.
 - `codable(for:_:)`
 - `codable(for:format:_:)`
 
-Do not add per-type versions of every cross-cutting operation in v0.1.
+Do not add per-type versions of every cross-cutting operation unless the added
+convenience removes real friction from common usage.
 
 Default standard identities:
 
@@ -164,7 +166,9 @@ cancel their underlying work.
 - `store(_:for:options:) async throws`
 - `remove(for:) async throws -> Bool`
 
-The initial implementation keeps memory access behind actors, so `peek` and `putInMemory` are async in v0.1. A future synchronous memory-only helper should be added only if the memory layer is explicitly designed for that guarantee.
+The current implementation keeps memory access behind actors, so `peek` and
+`putInMemory` are async. A future synchronous memory-only helper should be added
+only if the memory layer is explicitly designed for that guarantee.
 
 ## Initially Excluded
 

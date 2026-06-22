@@ -4,13 +4,21 @@ Yashima is intended to be a public open-source Swift Package. Security and priva
 
 ## Supported Versions
 
-Yashima has not reached its first public release yet. Supported versions will be documented here before the first stable release.
+Yashima is pre-1.0. Security fixes are expected to target the latest public release line.
+
+| Version | Supported |
+| ------- | --------- |
+| 0.2.x   | Yes, after the first public release |
+| < 0.2   | No |
 
 ## Reporting a Vulnerability
 
-This repository is currently being prepared before public release.
+Please report suspected vulnerabilities through GitHub's private vulnerability
+reporting flow for this repository when it is available.
 
-Before public release, please report security concerns privately to the maintainer through the existing private project communication channel. After public release, this section will be updated with the preferred public vulnerability reporting path, such as GitHub private vulnerability reporting or security advisories.
+If private vulnerability reporting is not available, please open a public issue
+that asks for a private reporting path without including technical details,
+proof-of-concept code, private data, or exploit instructions.
 
 Please do not disclose suspected vulnerabilities in a public issue until a maintainer has had a reasonable opportunity to investigate.
 

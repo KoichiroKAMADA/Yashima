@@ -6,8 +6,8 @@ Yashima is a Swift Concurrency-first local artifact cache. Contributions should 
 
 Requirements:
 
-- Swift 6.3 or later
-- macOS 14 or later for local development
+- Swift 6.1 or later
+- macOS 14 or later is recommended for local development and example validation
 
 Run the test suite:
 
