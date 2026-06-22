@@ -224,6 +224,39 @@ Use the asset timeline position you render, such as `thumbnailSecond`; do not
 include wall-clock request or generation time unless that time truly changes the
 artifact bytes.
 
+## Share One Cache Instance
+
+For a typical iOS app, prefer one long-lived `YCache` instance for the app's
+generated artifacts. Keep it in a small shared owner such as an app cache
+service, dependency container, actor, or `AppArtifactCache.shared`.
+
+Use `CacheKey.namespace` to separate artifact kinds inside that shared cache:
+
+```swift
+enum AppArtifactCache {
+    static let shared = YCache(storageDirectory: cacheDirectory)
+}
+
+let thumbnailKey = CacheKey(namespace: "video-thumbnails", identity: videoID)
+let durationKey = CacheKey(namespace: "video-durations", identity: videoID)
+
+let thumbnail = try await AppArtifactCache.shared.jpeg(for: thumbnailKey) {
+    try await renderThumbnail()
+}
+
+let duration: Double = try await AppArtifactCache.shared.codable(for: durationKey) {
+    try await loadDuration()
+}
+```
+
+Namespaces are logical partitions within a cache; they are not a reason to
+create one `YCache` instance per namespace. Create multiple `YCache` instances
+only when you intentionally need different storage directories, budgets,
+lifecycle rules, security boundaries, app-extension boundaries, or isolated
+test/preview stores. If two cache instances would point at the same
+`storageDirectory`, prefer one shared instance instead. When in doubt, use one
+shared `YCache` and separate artifact kinds with namespaces.
+
 ## Default Cache Budgets
 
 By default, `YCache` uses a 64 MiB memory budget and a 128 MiB storage budget.
@@ -374,7 +407,8 @@ let duration: Double = try await cache.codable(for: key) {
 
 Keep image thumbnails and small metadata in different namespaces, such as
 `video-thumbnails`, `photo-thumbnails`, `video-durations`, or `video-metadata`,
-so cache clearing and future budget tuning stay understandable.
+so cache clearing and future budget tuning stay understandable. These namespaces
+normally live inside the same shared `YCache` instance.
 
 ## Cache Lifecycle
 
