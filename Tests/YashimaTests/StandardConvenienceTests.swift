@@ -198,6 +198,39 @@ import CoreGraphics
         #expect(pngResolved.metadata?.codecIdentifier == ImageCodec.png.identifier)
     }
 }
+
+@Test func optionalJPEGConvenienceCoalescesConcurrentMisses() async throws {
+    try await withStandardYCache { cache, _ in
+        let key = standardKey("optional-jpeg-single-flight")
+        let counter = StandardCallCounter()
+
+        let sizes = try await withThrowingTaskGroup(of: StandardImageSize?.self) { group in
+            for _ in 0..<12 {
+                group.addTask {
+                    let image = try await cache.optionalJPEG(for: key) {
+                        _ = await counter.increment()
+                        try await Task.sleep(nanoseconds: 100_000_000)
+                        return makeStandardTestImage(width: 6, height: 5)
+                    }
+                    return image.map(imageSize)
+                }
+            }
+
+            var sizes: [StandardImageSize?] = []
+            for try await size in group {
+                sizes.append(size)
+            }
+            return sizes
+        }
+
+        let cached = try await cache.valueIfCached(for: key, codec: ImageCodec.jpeg())
+
+        #expect(sizes.count == 12)
+        #expect(sizes.allSatisfy { $0 == .init(width: 6, height: 5) })
+        #expect(imageSize(cached!) == .init(width: 6, height: 5))
+        #expect(await counter.count == 1)
+    }
+}
 #endif
 
 private struct StandardSummary: Codable, Sendable, Equatable {
@@ -209,9 +242,23 @@ private enum StandardConvenienceTestError: Error {
     case unexpectedGenerator
 }
 
-private struct StandardImageSize: Equatable {
+private struct StandardImageSize: Sendable, Equatable {
     var width: Int
     var height: Int
+}
+
+private actor StandardCallCounter {
+    private var value = 0
+
+    var count: Int {
+        value
+    }
+
+    @discardableResult
+    func increment() -> Int {
+        value += 1
+        return value
+    }
 }
 
 private func withStandardYCache<T>(
