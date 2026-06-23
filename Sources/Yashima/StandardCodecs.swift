@@ -20,6 +20,24 @@ public struct DataCodec: CacheCodec, Equatable {
     }
 }
 
+public struct CompressedDataCodec: CacheCodec, CacheMemoryCostEstimating, Equatable {
+    public let identifier = "compressed-data-lzfse-v1"
+
+    public init() {}
+
+    public func encode(_ value: Data) throws -> Data {
+        try (value as NSData).compressed(using: .lzfse) as Data
+    }
+
+    public func decode(_ data: Data) throws -> Data {
+        try (data as NSData).decompressed(using: .lzfse) as Data
+    }
+
+    func estimatedMemoryCost(for value: any Sendable, encodedData: Data) -> Int? {
+        (value as? Data)?.count ?? encodedData.count
+    }
+}
+
 public struct CodableCodec<Value: Codable & Sendable>: CacheCodec, Equatable {
     public let format: Format
     public let identifier: String

@@ -29,6 +29,7 @@ line. Keep it small and review it before adding new symbols.
 ## Standard Codecs
 
 - `DataCodec`
+- `CompressedDataCodec`
 - `CodableCodec<Value>`
 - `CodableCodec<Value>.Format`
 - `ImageCodec`
@@ -62,6 +63,7 @@ convenience removes real friction from common usage.
 Default standard identities:
 
 - `DataCodec().identifier == "data-v1"`
+- `CompressedDataCodec().identifier == "compressed-data-lzfse-v1"`
 - `CodableCodec<Value>(format: .json).identifier == "codable-json-v1:<module-qualified-type>"`
 - `CodableCodec<Value>(format: .propertyList).identifier == "codable-property-list-binary-v1:<module-qualified-type>"`
 - `ImageCodec.png.identifier == "image-png-v1"`
@@ -142,9 +144,10 @@ screens, exports, and generation where completing the producer still has value
 after the original caller disappears.
 
 When `cost` is omitted, `DataCodec` and `CodableCodec` use encoded byte count as
-their memory cost. `ImageCodec` estimates decoded bitmap memory instead of using
-the compressed PNG or JPEG byte count. When `cost` is provided, that explicit
-cost wins.
+their memory cost. `CompressedDataCodec` stores LZFSE-compressed bytes, but uses
+the decompressed `Data.count` as memory cost. `ImageCodec` estimates decoded
+bitmap memory instead of using the compressed PNG or JPEG byte count. When
+`cost` is provided, that explicit cost wins.
 
 `.treatAsMiss` is intended for disposable generated artifacts. Use `.throwError`
 when a caller needs strict cache corruption or decode failure reporting. It is
@@ -228,6 +231,8 @@ only if the memory layer is explicitly designed for that guarantee.
 - Public tag invalidation
 - Public predicate invalidation
 - Failure markers or negative-cache entries
+- Automatic compression selection
+- Per-type compressed convenience methods
 - AVFoundation thumbnail APIs
 - PhotoKit thumbnail APIs
 - URL loading

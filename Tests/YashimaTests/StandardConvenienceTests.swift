@@ -35,6 +35,88 @@ import CoreGraphics
     }
 }
 
+@Test func compressedDataCodecRoundTripsAndPersistsLZFSEPayload() async throws {
+    try await withStandardYCache { cache, rootDirectory in
+        let key = standardKey("compressed-data")
+        let codec = CompressedDataCodec()
+        let generated = standardCompressibleHTMLData(repetitions: 160)
+
+        let resolved = try await cache.resolve(for: key, codec: codec) {
+            generated
+        }
+        let newCache = YCache(storageDirectory: rootDirectory)
+        let persisted = try await newCache.resolve(for: key, codec: codec) {
+            throw StandardConvenienceTestError.unexpectedGenerator
+        }
+        let storedData = try #require(try storedDataFiles(in: rootDirectory).first)
+
+        #expect(resolved.value == generated)
+        #expect(resolved.metadata?.codecIdentifier == codec.identifier)
+        #expect(resolved.metadata?.cost == generated.count)
+        #expect(persisted.value == generated)
+        #expect(persisted.source == .storage)
+        #expect(persisted.metadata?.cost == generated.count)
+        #expect(storedData.count < generated.count)
+    }
+}
+
+@Test func compressedDataCodecUsesDistinctIdentityFromDataCodec() async throws {
+    try await withStandardYCache { cache, _ in
+        let key = standardKey("compressed-data-distinct")
+        let uncompressed = Data("plain-data".utf8)
+        let compressed = standardCompressibleHTMLData(repetitions: 12)
+        let compressedCodec = CompressedDataCodec()
+
+        let dataValue = try await cache.data(for: key) {
+            uncompressed
+        }
+        let compressedValue = try await cache.resolve(for: key, codec: compressedCodec) {
+            compressed
+        }
+        let dataResolved = try await cache.resolve(for: key, codec: DataCodec()) {
+            throw StandardConvenienceTestError.unexpectedGenerator
+        }
+
+        #expect(dataValue == uncompressed)
+        #expect(compressedValue.value == compressed)
+        #expect(compressedValue.metadata?.codecIdentifier == compressedCodec.identifier)
+        #expect(dataResolved.value == uncompressed)
+        #expect(dataResolved.metadata?.codecIdentifier == DataCodec().identifier)
+        #expect(dataResolved.metadata?.codecIdentifier != compressedValue.metadata?.codecIdentifier)
+    }
+}
+
+@Test func compressedDataCodecTreatsCorruptionAsMissByDefault() async throws {
+    try await withStandardYCache { cache, rootDirectory in
+        let key = standardKey("compressed-data-corruption")
+        let codec = CompressedDataCodec()
+        let original = standardCompressibleHTMLData(repetitions: 24)
+        let regenerated = standardCompressibleHTMLData(repetitions: 25)
+
+        _ = try await cache.resolve(for: key, codec: codec) {
+            original
+        }
+        let dataFile = try #require(try storedDataFileURLs(in: rootDirectory).first)
+        try Data("not-a-valid-compressed-payload".utf8).write(to: dataFile)
+
+        let newCache = YCache(storageDirectory: rootDirectory)
+        let resolved = try await newCache.resolve(for: key, codec: codec) {
+            regenerated
+        }
+
+        #expect(resolved.value == regenerated)
+        #expect(resolved.source == .generated)
+    }
+}
+
+@Test func compressedDataCodecRejectsInvalidPayloads() throws {
+    let codec = CompressedDataCodec()
+
+    #expect(throws: (any Error).self) {
+        _ = try codec.decode(Data("not-yashima-compressed-data".utf8))
+    }
+}
+
 @Test func codableConvenienceRoundTripsJSONAndUsesDefaultFormatIdentity() async throws {
     try await withStandardYCache { cache, rootDirectory in
         let key = standardKey("codable-json")
@@ -105,6 +187,7 @@ import CoreGraphics
     let propertyList = CodableCodec<StandardSummary>(format: .propertyList)
 
     #expect(DataCodec().identifier == "data-v1")
+    #expect(CompressedDataCodec().identifier == "compressed-data-lzfse-v1")
     #expect(json.identifier == "codable-json-v1:\(typeName)")
     #expect(propertyList.identifier == "codable-property-list-binary-v1:\(typeName)")
     #expect(json.identifier != propertyList.identifier)
@@ -279,6 +362,48 @@ private func withStandardYCache<T>(
 
 private func standardKey(_ name: String) -> CacheKey {
     CacheKey(namespace: "standard-convenience-tests", identity: name)
+}
+
+private func standardCompressibleHTMLData(repetitions: Int) -> Data {
+    let fragment = """
+    <section class="markdown-body">
+      <h2>Generated Artifact Cache</h2>
+      <p>Yashima stores reusable local artifacts with predictable cache keys.</p>
+      <pre><code>let value = try await cache.resolve(for: key, codec: codec) { generate() }</code></pre>
+    </section>
+
+    """
+    let html = """
+    <!doctype html>
+    <html><head><meta charset="utf-8"><title>Yashima</title></head><body>
+    \(String(repeating: fragment, count: repetitions))
+    </body></html>
+    """
+    return Data(html.utf8)
+}
+
+private func storedDataFiles(in rootDirectory: URL) throws -> [Data] {
+    try storedDataFileURLs(in: rootDirectory).map {
+        try Data(contentsOf: $0)
+    }
+}
+
+private func storedDataFileURLs(in rootDirectory: URL) throws -> [URL] {
+    guard FileManager.default.fileExists(atPath: rootDirectory.path) else {
+        return []
+    }
+
+    let enumerator = FileManager.default.enumerator(
+        at: rootDirectory,
+        includingPropertiesForKeys: nil
+    )
+    var urls: [URL] = []
+    while let url = enumerator?.nextObject() as? URL {
+        if url.pathExtension == "data" {
+            urls.append(url)
+        }
+    }
+    return urls.sorted { $0.path < $1.path }
 }
 
 #if canImport(UIKit) || canImport(AppKit)

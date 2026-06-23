@@ -25,7 +25,8 @@ generation.
 
 - One async get-or-generate call for the common path.
 - L1 memory cache and L2 file-backed storage.
-- Typed codecs for `Data`, `Codable`, PNG, and JPEG artifacts.
+- Typed codecs for `Data`, LZFSE-compressed `Data`, `Codable`, PNG, and JPEG
+  artifacts.
 - Cache identity based on both `CacheKey` and `CacheCodec.identifier`.
 - Single-flight generation so concurrent requests for the same artifact share
   work.
@@ -39,13 +40,13 @@ generation.
 Yashima is distributed as a Swift Package. In Xcode, add this repository from
 File > Add Package Dependencies.
 
-For `Package.swift`, use the `0.3.x` release line while Yashima is pre-1.0:
+For `Package.swift`, use the `0.4.x` release line while Yashima is pre-1.0:
 
 ```swift
 dependencies: [
     .package(
         url: "https://github.com/KoichiroKAMADA/Yashima.git",
-        .upToNextMinor(from: "0.3.0")
+        .upToNextMinor(from: "0.4.0")
     ),
 ]
 ```
@@ -92,7 +93,7 @@ Report:
 3. What cache keys and codecs should be used.
 4. What should not be cached with Yashima.
 5. The main risks: stale cache keys, privacy-sensitive data, disk usage, and cancellation behavior.
-6. A minimal Swift Package Manager integration plan using version 0.3.0.
+6. A minimal Swift Package Manager integration plan using version 0.4.0.
 
 Do not add the dependency or edit code yet. First explain the expected benefit,
 risks, and smallest safe integration plan.
@@ -138,6 +139,24 @@ let report = try await reports.value(for: key) {
 
 let immediate = try await reports.peek(for: key)
 ```
+
+## Compressed Data Artifacts
+
+For large text-like generated data such as rendered HTML, JSON, manifests, or
+summaries, opt into LZFSE compression with `CompressedDataCodec`:
+
+```swift
+let documents = cache.using(CompressedDataCodec())
+
+let htmlData = try await documents.value(for: key) {
+    Data(renderedHTML.utf8)
+}
+```
+
+Compression is explicit. `DataCodec` remains uncompressed, and compressed
+entries use a distinct codec identity. Avoid using `CompressedDataCodec` for
+already-compressed formats such as JPEG, PNG, or video data unless measurement
+shows a benefit.
 
 ## Optional Artifacts
 

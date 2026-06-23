@@ -20,7 +20,7 @@ Yashima は、再生成可能だが生成コストの高いローカル結果の
 
 - 一般的な用途をひとつの async get-or-generate 呼び出しで扱える API。
 - L1 メモリキャッシュ + L2 ファイルベースストレージ。
-- `Data`、`Codable`、PNG、JPEG アーティファクト向けの typed codec。
+- `Data`、LZFSE 圧縮 `Data`、`Codable`、PNG、JPEG アーティファクト向けの typed codec。
 - `CacheKey` と `CacheCodec.identifier` の両方に基づくキャッシュ ID。
 - 同じ未生成アーティファクトへ並行リクエストが来たときに生成処理を共有する single-flight。
 - UI 上の表示・非表示に合わせて、待ち手がいなくなった生成を止められる cancellation-aware single-flight。
@@ -30,13 +30,13 @@ Yashima は、再生成可能だが生成コストの高いローカル結果の
 
 Yashima は Swift Package として配布されます。Xcode では File > Add Package Dependencies からこのリポジトリを追加します。
 
-`Package.swift` で指定する場合、Yashima が 1.0 に到達するまでは `0.3.x` 系を使います。
+`Package.swift` で指定する場合、Yashima が 1.0 に到達するまでは `0.4.x` 系を使います。
 
 ```swift
 dependencies: [
     .package(
         url: "https://github.com/KoichiroKAMADA/Yashima.git",
-        .upToNextMinor(from: "0.3.0")
+        .upToNextMinor(from: "0.4.0")
     ),
 ]
 ```
@@ -74,7 +74,7 @@ https://github.com/KoichiroKAMADA/Yashima
 3. どのような CacheKey と Codec を使うべきか。
 4. Yashima でキャッシュすべきでないものは何か。
 5. 主なリスク。古い cache key、プライバシーに関わるデータ、ディスク使用量、キャンセル挙動を確認してください。
-6. バージョン 0.3.0 を前提にした、最小限の Swift Package Manager 導入案。
+6. バージョン 0.4.0 を前提にした、最小限の Swift Package Manager 導入案。
 
 まだ依存関係の追加やコード編集は行わず、期待できる効果、リスク、最小の安全な導入計画を先に説明してください。
 ```
@@ -113,6 +113,20 @@ let report = try await reports.value(for: key) {
 
 let immediate = try await reports.peek(for: key)
 ```
+
+## 圧縮 Data アーティファクト
+
+レンダリング済み HTML、JSON、manifest、summary のような大きめのテキスト系生成データでは、`CompressedDataCodec` を選ぶことで LZFSE 圧縮を明示的に使えます。
+
+```swift
+let documents = cache.using(CompressedDataCodec())
+
+let htmlData = try await documents.value(for: key) {
+    Data(renderedHTML.utf8)
+}
+```
+
+圧縮は自動ではなく明示的です。`DataCodec` は非圧縮のままで、圧縮された entry は別の codec identity を持ちます。JPEG、PNG、動画データのようにすでに圧縮されている形式では、実測して効果がある場合を除き `CompressedDataCodec` は使わないでください。
 
 ## Optional な生成物
 
