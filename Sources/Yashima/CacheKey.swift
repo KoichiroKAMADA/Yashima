@@ -42,6 +42,16 @@ public struct CacheKey: Sendable, Hashable, Codable {
 }
 
 extension CacheKey {
+    /// A stable, key-only identifier derived from this key's canonical form.
+    ///
+    /// Use this when code outside Yashima needs an opaque string that stays the
+    /// same across process launches for the same `CacheKey`, such as log labels
+    /// or auxiliary file names. This is not a cache entry identifier: stored
+    /// entries are identified by both `CacheKey` and `CacheCodec.identifier`.
+    public var stableIdentifier: String {
+        stableHash.rawValue
+    }
+
     public static func == (lhs: CacheKey, rhs: CacheKey) -> Bool {
         lhs.canonicalRepresentation == rhs.canonicalRepresentation
     }

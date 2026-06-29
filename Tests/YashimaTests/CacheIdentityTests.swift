@@ -65,8 +65,29 @@ private struct TestCodec: CacheCodec {
         .version("renderer", 3)
 
     #expect(key.stableHash.rawValue == "a02bbdf6fd55ad4512872772211b170d6693e8e80faefb18344ca7a3b0bd7791")
+    #expect(key.stableIdentifier == key.stableHash.rawValue)
     #expect(key.stableHash.rawValue.count == 64)
     #expect(key.stableHash.rawValue.allSatisfy { $0.isHexDigit })
+}
+
+@Test func cacheKeyStableIdentifierUsesCanonicalKeyOnly() {
+    let first = CacheKey(namespace: "thumbnail", identity: "video-42")
+        .variant("size", "320x180")
+        .variant("scale", 2)
+        .version("renderer", 3)
+    let reordered = CacheKey(namespace: "thumbnail", identity: "video-42")
+        .variant("scale", 2)
+        .variant("size", "320x180")
+        .version("renderer", 3)
+    let differentVersion = CacheKey(namespace: "thumbnail", identity: "video-42")
+        .variant("scale", 2)
+        .variant("size", "320x180")
+        .version("renderer", 4)
+
+    #expect(first.stableIdentifier == reordered.stableIdentifier)
+    #expect(first.stableIdentifier != differentVersion.stableIdentifier)
+    #expect(first.stableIdentifier.count == 64)
+    #expect(first.stableIdentifier.allSatisfy { $0.isHexDigit })
 }
 
 @Test func entryIdentityIncludesCodecIdentifier() {
@@ -77,9 +98,12 @@ private struct TestCodec: CacheCodec {
     let png = CacheEntryIdentity(key: key, codec: TestCodec(identifier: "image-png-v1"))
 
     #expect(jpeg.keyHash == png.keyHash)
+    #expect(jpeg.keyHash.rawValue == key.stableIdentifier)
     #expect(jpeg.codecIdentifier == "image-jpeg-q85-v1")
     #expect(png.codecIdentifier == "image-png-v1")
     #expect(jpeg.entryHash != png.entryHash)
+    #expect(jpeg.entryHash != key.stableIdentifier)
+    #expect(png.entryHash != key.stableIdentifier)
 }
 
 @Test func sameKeyAndCodecProduceSameEntryIdentity() {
