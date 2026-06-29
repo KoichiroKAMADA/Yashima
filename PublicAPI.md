@@ -26,6 +26,15 @@ line. Keep it small and review it before adding new symbols.
 
 `Y` is reserved for the root type `YCache`. Do not introduce `YKey`, `YCodec`, or other prefixed vocabulary types.
 
+`CacheKey.stableIdentifier` exposes an opaque, stable string derived from the
+canonical `CacheKey` only. It is for external labels, auxiliary file names, and
+deduplication contexts that require a string. It is not a storage entry
+identifier, because effective cache entries are keyed by both `CacheKey` and
+`CacheCodec.identifier`.
+
+`CacheKeyHash` and the canonical key representation remain internal so the
+public API does not expose Yashima's storage layout details.
+
 ## Standard Codecs
 
 - `DataCodec`

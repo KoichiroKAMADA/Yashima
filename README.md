@@ -40,13 +40,13 @@ generation.
 Yashima is distributed as a Swift Package. In Xcode, add this repository from
 File > Add Package Dependencies.
 
-For `Package.swift`, use the `0.4.x` release line while Yashima is pre-1.0:
+For `Package.swift`, use the `0.5.x` release line while Yashima is pre-1.0:
 
 ```swift
 dependencies: [
     .package(
         url: "https://github.com/KoichiroKAMADA/Yashima.git",
-        .upToNextMinor(from: "0.4.0")
+        .upToNextMinor(from: "0.5.0")
     ),
 ]
 ```
@@ -93,7 +93,7 @@ Report:
 3. What cache keys and codecs should be used.
 4. What should not be cached with Yashima.
 5. The main risks: stale cache keys, privacy-sensitive data, disk usage, and cancellation behavior.
-6. A minimal Swift Package Manager integration plan using version 0.4.0.
+6. A minimal Swift Package Manager integration plan using version 0.5.0.
 
 Do not add the dependency or edit code yet. First explain the expected benefit,
 risks, and smallest safe integration plan.
@@ -217,6 +217,12 @@ renderer options, source-data revision, and any large input represented by a
 stable digest. Do not use Swift `hashValue` or `Hasher` for persisted cache
 identity; use a stable digest such as SHA-256 when you need to summarize a route,
 chart dataset, or rendered document.
+
+When code outside Yashima needs a key-derived string, use
+`key.stableIdentifier`. It is a stable, opaque identifier for the `CacheKey`
+alone, suitable for auxiliary file names, log labels, or process-to-process
+deduplication. Do not treat it as a stored cache entry identifier: a storage
+entry is identified by the `CacheKey` and the `CacheCodec.identifier` together.
 
 The rule of thumb is simple: if two generations can produce different bytes,
 their `CacheKey` should be different. If the key is right, cached values may be
@@ -448,6 +454,8 @@ try await cache.trimStorageIfNeeded()
 Storage entries are trimmed by least-recently-used metadata when
 `storageMaximumByteCount` is configured. Storage hits update their access time.
 Yashima hashes the canonical `CacheKey` and codec identity internally.
+`CacheKey.stableIdentifier` exposes only the key portion of that identity for
+callers that need a stable string outside the cache.
 
 `metadata(for:codec:)` and `contains(for:codec:)` are lightweight lookups. They
 do not decode the payload or prove that a later content digest check will

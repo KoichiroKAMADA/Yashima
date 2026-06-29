@@ -30,13 +30,13 @@ Yashima は、再生成可能だが生成コストの高いローカル結果の
 
 Yashima は Swift Package として配布されます。Xcode では File > Add Package Dependencies からこのリポジトリを追加します。
 
-`Package.swift` で指定する場合、Yashima が 1.0 に到達するまでは `0.4.x` 系を使います。
+`Package.swift` で指定する場合、Yashima が 1.0 に到達するまでは `0.5.x` 系を使います。
 
 ```swift
 dependencies: [
     .package(
         url: "https://github.com/KoichiroKAMADA/Yashima.git",
-        .upToNextMinor(from: "0.4.0")
+        .upToNextMinor(from: "0.5.0")
     ),
 ]
 ```
@@ -74,7 +74,7 @@ https://github.com/KoichiroKAMADA/Yashima
 3. どのような CacheKey と Codec を使うべきか。
 4. Yashima でキャッシュすべきでないものは何か。
 5. 主なリスク。古い cache key、プライバシーに関わるデータ、ディスク使用量、キャンセル挙動を確認してください。
-6. バージョン 0.4.0 を前提にした、最小限の Swift Package Manager 導入案。
+6. バージョン 0.5.0 を前提にした、最小限の Swift Package Manager 導入案。
 
 まだ依存関係の追加やコード編集は行わず、期待できる効果、リスク、最小の安全な導入計画を先に説明してください。
 ```
@@ -169,6 +169,8 @@ let key = CacheKey(namespace: "summary-maps", identity: summaryID)
 ```
 
 よい key は、必ずしも長い key ではありません。ただし、完全な key である必要があります。サイズ、scale、appearance、locale、renderer option、元データの revision、そして大きな入力を要約した安定 digest など、生成結果を変え得る入力を含めます。永続的なキャッシュ ID には Swift の `hashValue` や `Hasher` を使わないでください。ルート、チャートのデータセット、レンダリング対象のドキュメントなど、大きな入力を要約したい場合は SHA-256 のような安定 digest を使います。
+
+Yashima の外側で key 由来の文字列が必要な場合は、`key.stableIdentifier` を使えます。これは `CacheKey` 単独から導出される安定した不透明 ID で、補助ファイル名、ログ用ラベル、プロセスをまたぐ重複排除などに使えます。ただし、保存済みキャッシュ entry の ID として扱わないでください。storage entry は `CacheKey` と `CacheCodec.identifier` の組み合わせで識別されます。
 
 判断基準はシンプルです。2 回の生成で違う bytes ができる可能性があるなら、`CacheKey` も違うべきです。key が正しければ、キャッシュ値は消えたり再生成されたりしても、要求と違う生成物が返ることはありません。
 
@@ -340,7 +342,7 @@ let usage = try await cache.storageUsage()
 try await cache.trimStorageIfNeeded()
 ```
 
-`storageMaximumByteCount` を設定すると、ストレージ entry は least-recently-used の metadata に基づいて trim されます。storage hit は access time を更新します。Yashima は canonical `CacheKey` と codec identity を内部的にハッシュします。
+`storageMaximumByteCount` を設定すると、ストレージ entry は least-recently-used の metadata に基づいて trim されます。storage hit は access time を更新します。Yashima は canonical `CacheKey` と codec identity を内部的にハッシュします。`CacheKey.stableIdentifier` は、キャッシュ外で安定文字列が必要な呼び出し側のために、そのうち key 側だけを公開する API です。
 
 既定の read failure policy では、破損したキャッシュファイルを miss として扱い、呼び出し側が再生成できます。厳密にエラーを扱いたい場合は `readFailurePolicy: .throwError` を指定できます。write では `writeFailurePolicy: .bestEffort` により、ストレージ永続化に失敗しても生成値を返し、メモリのみのキャッシュへフォールバックできます。
 
