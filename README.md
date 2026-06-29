@@ -506,16 +506,17 @@ regeneration.
 
 ## Used in App Store Apps
 
-### Tracer
+### Tracer - Easy Location Logger
 
 <p align="center">
   <img src="Documentation/Assets/tracer-yashima-scroll.gif" alt="Tracer scrolling through map artifacts cached by Yashima" width="360">
 </p>
 
-Yashima powers generated-artifact caching in Tracer, a location-recording app on
-the App Store. Tracer generates many local artifacts from recorded activity
-data: map snapshots, summaries, chart-ready data, and list previews that appear
-while the user scrolls through logs and revisits past records.
+Yashima powers generated-artifact caching in Tracer - Easy Location Logger, a
+location-recording app on the App Store. Tracer generates many local artifacts
+from recorded activity data: map snapshots, summaries, chart-ready data, and
+list previews that appear while the user scrolls through logs and revisits past
+records.
 
 <p align="center">
   <a href="https://apps.apple.com/us/app/tracer-easy-location-logger/id1136146951">
@@ -534,6 +535,40 @@ That production workload is the kind of problem Yashima is built for. It is not
 a demo-only image cache; it is an App Store-grade cache engine for local results
 that are safe to regenerate but too costly to recreate every time. The recording
 above uses demo data from a Yashima-backed Tracer build.
+
+### Broader Production Use
+
+Tracer - Easy Location Logger is the most detailed public case study, but it is
+not the only production workload. The project author also uses Yashima across a
+set of shipped independent App Store apps. These apps are part of why Yashima is
+designed around real generated artifacts instead of demo-only image caching.
+
+- [Mugen Clock](https://apps.apple.com/us/app/mugen-clock/id1064833509): an
+  easy-to-read, highly customizable clock app with over 2 million downloads.
+  Yashima caches background image thumbnails, color and blur filter previews,
+  background video thumbnails, and duration metadata.
+- [Mugen Sound](https://apps.apple.com/us/app/mugen-sound/id6748948810): an
+  ambient sound app for focus, sleep, and noise masking. Yashima caches
+  downsampled JPEG derivatives for sound artwork used in grids, playlists, and
+  full-screen playback.
+- [Mugen Player](https://apps.apple.com/us/app/mugen-player/id1265142965): a
+  lightweight continuous media player. Yashima caches file, Photo Library, and
+  bookmark thumbnails across browsing and playback surfaces.
+- [Mugen Camera Non-Stop Cam](https://apps.apple.com/us/app/mugen-camera-non-stop-cam/id1142214008):
+  a long-form video recording app built for reliable non-stop capture. Yashima
+  caches video thumbnails and duration metadata for files recorded or managed in
+  app storage.
+- [Zero Camera](https://apps.apple.com/us/app/zero-camera/id1449814538): a fast
+  video camera app that starts recording with minimal interaction. Yashima
+  caches app-storage video thumbnails and duration metadata.
+- [ZeroMD](https://apps.apple.com/us/app/zeromd/id6770927023): a lightweight
+  Markdown viewer for quickly opening and reading `.md` and `.markdown` files
+  on Mac. Yashima caches first-paint Markdown rendering artifacts so reopened
+  documents can reuse generated HTML and navigation payloads.
+
+Together, these apps exercise Yashima across image downsampling, filter-preview
+generation, AVFoundation thumbnail extraction, small metadata caching, and
+compressed document-rendering artifacts.
 
 ### Share Your App
 
