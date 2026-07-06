@@ -5,6 +5,14 @@
 # Yashima
 
 <p align="center">
+  <a href="https://github.com/KoichiroKAMADA/Yashima/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/KoichiroKAMADA/Yashima/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/KoichiroKAMADA/Yashima/releases"><img alt="Release" src="https://img.shields.io/github/v/release/KoichiroKAMADA/Yashima?sort=semver"></a>
+  <img alt="Swift 6.1+" src="https://img.shields.io/badge/Swift-6.1%2B-F05138?logo=swift&logoColor=white">
+  <img alt="iOS 16+ | macOS 13+" src="https://img.shields.io/badge/platform-iOS%2016%2B%20%7C%20macOS%2013%2B-lightgrey">
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/github/license/KoichiroKAMADA/Yashima"></a>
+</p>
+
+<p align="center">
   <img src="Documentation/Assets/yashima-hero.jpg" alt="Yashima" width="840">
 </p>
 
@@ -35,6 +43,25 @@ generation.
 - Disposable-cache failure semantics: corrupt stored artifacts can be treated as
   misses and regenerated.
 
+## When Not to Use Yashima
+
+Yashima is deliberately narrow. Use it for disposable local artifacts that an app
+can regenerate. Choose a different tool when the data has different ownership:
+
+- For downloading, decoding, and caching remote images, use an image pipeline
+  such as [Nuke](https://github.com/kean/Nuke) or
+  [Kingfisher](https://github.com/onevcat/Kingfisher).
+- For structured app data that must be preserved, use a database or persistence
+  layer such as SwiftData, Core Data, SQLite, or GRDB.
+- For user-created files, originals, documents, recordings, or anything that
+  cannot safely disappear, do not store the only copy in Yashima.
+- For in-memory-only object reuse, `NSCache` may be the simpler choice.
+- For negative caching, such as remembering that no value exists, model that
+  state in your app. Yashima does not persist `nil` generator results.
+
+See [Comparison](Documentation/Comparison.md) for a fuller, respectful comparison
+with adjacent cache and image-loading libraries.
+
 ## Installation
 
 Yashima is distributed as a Swift Package. In Xcode, add this repository from
@@ -60,6 +87,16 @@ artifacts:
     dependencies: ["Yashima"]
 )
 ```
+
+## Docs and Guides
+
+- [PublicAPI.md](PublicAPI.md): public API inventory and design intent.
+- [DocC catalog](Sources/Yashima/Yashima.docc): documentation source for hosted
+  API documentation after Swift Package Index indexing.
+- [Comparison](Documentation/Comparison.md): when to choose Yashima and when to
+  choose adjacent tools.
+- [CHANGELOG.md](CHANGELOG.md): release history.
+- [Benchmarks](Benchmarks): reproducible local measurement harness.
 
 ## Ask Your Coding Agent If Yashima Fits
 
@@ -512,6 +549,19 @@ regressions in the parts of a cache engine that are hardest to cover with small
 unit tests: concurrency, disk-backed storage, trimming, corruption recovery, and
 regeneration.
 
+## Benchmark Harness
+
+Yashima includes a small local benchmark harness in [`Benchmarks`](Benchmarks).
+It is separate from the correctness stress runner and exists to make performance
+claims reproducible before they are published:
+
+```sh
+swift run --package-path Benchmarks YashimaBenchmarks --iterations 200
+```
+
+Benchmark numbers depend heavily on hardware, OS version, storage state, and
+payload shape. Treat local output as measurement input, not a universal claim.
+
 ## Used in App Store Apps
 
 ### Tracer - Easy Location Logger
@@ -552,7 +602,8 @@ set of shipped independent App Store apps. These apps are part of why Yashima is
 designed around real generated artifacts instead of demo-only image caching.
 
 - [Mugen Clock](https://apps.apple.com/us/app/mugen-clock/id1064833509): an
-  easy-to-read, highly customizable clock app with over 2 million downloads.
+  easy-to-read, highly customizable clock app with maintainer-reported
+  2-million-plus downloads.
   Yashima caches background image thumbnails, color and blur filter previews,
   background video thumbnails, and duration metadata.
 - [Mugen Sound](https://apps.apple.com/us/app/mugen-sound/id6748948810): an
@@ -613,7 +664,9 @@ and storage edge cases with synthetic workloads.
 
 ## Contributing
 
-Yashima is being prepared as a public Swift Package. See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md) before contributing.
+Yashima is a public Swift Package. See [CONTRIBUTING.md](CONTRIBUTING.md),
+[SECURITY.md](SECURITY.md), [PublicAPI.md](PublicAPI.md), and
+[CHANGELOG.md](CHANGELOG.md) before contributing.
 
 ## License
 
