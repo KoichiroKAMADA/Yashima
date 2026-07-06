@@ -90,13 +90,18 @@ artifacts:
 
 ## Docs and Guides
 
+- [Swift Package Index](https://swiftpackageindex.com/KoichiroKAMADA/Yashima):
+  package page and hosted documentation once SPI build results are available.
 - [PublicAPI.md](PublicAPI.md): public API inventory and design intent.
-- [DocC catalog](Sources/Yashima/Yashima.docc): documentation source for hosted
-  API documentation after Swift Package Index indexing.
+- [DocC catalog](Sources/Yashima/Yashima.docc): documentation source used by
+  Swift Package Index hosting.
 - [Comparison](Documentation/Comparison.md): when to choose Yashima and when to
   choose adjacent tools.
+- [FAQ](Documentation/FAQ.md): quick answers for adoption and support questions.
 - [CHANGELOG.md](CHANGELOG.md): release history.
 - [Benchmarks](Benchmarks): reproducible local measurement harness.
+- [GitHub Discussions](https://github.com/KoichiroKAMADA/Yashima/discussions):
+  questions, fit checks, and design discussions.
 
 ## Ask Your Coding Agent If Yashima Fits
 
