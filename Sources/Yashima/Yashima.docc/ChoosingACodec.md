@@ -53,5 +53,9 @@ let thumbnail = try await cache.jpeg(for: key, quality: 0.85) {
 }
 ```
 
+The convenience methods accept and return platform images directly. When using
+``ImageCodec`` through ``YCache/using(_:)`` or ``YCache/resolve(for:codec:options:_:)``,
+wrap and unwrap platform images with ``ImageCodec/Value``.
+
 Image codecs store explicit PNG or JPEG data. Yashima does not download remote
 images; use a dedicated image pipeline for that problem.

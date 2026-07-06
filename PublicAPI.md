@@ -42,10 +42,17 @@ public API does not expose Yashima's storage layout details.
 - `CodableCodec<Value>`
 - `CodableCodec<Value>.Format`
 - `ImageCodec`
+- `ImageCodec.PlatformImage`
+- `ImageCodec.Value`
 - `ImageCodec.Format`
 - `ImageCodec.Error`
 
 `ImageCodec` is available on Apple platforms with image frameworks. The `jpeg` and `png` convenience APIs accept and return `UIImage` when UIKit is available and `NSImage` when AppKit is available. Direct codec usage stores platform images through `ImageCodec.Value`, a small Sendable wrapper around the platform image.
+
+`ImageCodec.jpeg(quality:)` clamps finite quality values into `0...1` and
+rounds them to an integer percentage for codec identity. Non-finite quality
+values fall back to `ImageCodec.defaultJPEGQuality`. Different input values that
+normalize to the same percentage intentionally use the same codec identity.
 
 ## Standard Convenience
 

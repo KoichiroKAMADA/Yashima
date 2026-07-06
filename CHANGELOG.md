@@ -13,6 +13,15 @@ and Yashima uses semantic Git tags for releases.
 - Swift Package Index manifest.
 - Comparison guide, benchmark harness, and `llms.txt` discovery index.
 - README badges and explicit "When Not to Use Yashima" guidance.
+- Public-import documentation example tests that keep README-style workflows
+  compiling against the shipped API.
+- Public API inventory notes for direct `ImageCodec` usage, including
+  `ImageCodec.Value` and JPEG quality normalization.
+
+### Changed
+
+- Production-use copy now marks the Mugen Clock download count as
+  maintainer-reported rather than independently verified.
 
 ## [0.5.0] - 2026-06-29
 

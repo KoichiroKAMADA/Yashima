@@ -602,7 +602,8 @@ set of shipped independent App Store apps. These apps are part of why Yashima is
 designed around real generated artifacts instead of demo-only image caching.
 
 - [Mugen Clock](https://apps.apple.com/us/app/mugen-clock/id1064833509): an
-  easy-to-read, highly customizable clock app with over 2 million downloads.
+  easy-to-read, highly customizable clock app with maintainer-reported
+  2-million-plus downloads.
   Yashima caches background image thumbnails, color and blur filter previews,
   background video thumbnails, and duration metadata.
 - [Mugen Sound](https://apps.apple.com/us/app/mugen-sound/id6748948810): an
