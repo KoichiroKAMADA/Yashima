@@ -1,0 +1,81 @@
+name: Bug report
+description: Report a reproducible Yashima defect.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Please use synthetic data and avoid secrets, private paths, real user data, or private app logs.
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior and the expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide a small self-contained Swift snippet, test case, or sample project outline using synthetic data.
+      placeholder: |
+        1. Create a YCache at ...
+        2. Use this CacheKey and codec ...
+        3. Call ...
+        4. Observe ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Cache identity / CacheKey
+        - Codec / encoding / decoding
+        - Memory cache
+        - Storage cache
+        - Single-flight / cancellation
+        - Swift Package Manager / build
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Yashima version or revision
+      placeholder: "0.5.0, main, or a commit SHA"
+    validations:
+      required: true
+  - type: input
+    id: swift-version
+    attributes:
+      label: Swift version
+      placeholder: "swift --version"
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: "iOS version, macOS version, etc."
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs or output
+      description: Include only public-safe logs. Remove local paths, tokens, private data, and real user data.
+      render: text
+    validations:
+      required: false
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Public-safety checklist
+      options:
+        - label: I used synthetic data or sanitized all private data.
+          required: true
+        - label: I did not include secrets, tokens, local absolute paths, private logs, or real user data.
+          required: true

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and fit checks
+    url: https://github.com/KoichiroKAMADA/Yashima/discussions
+    about: Please use Discussions for adoption questions, API fit checks, and design discussion.
+  - name: Security reports
+    url: https://github.com/KoichiroKAMADA/Yashima/security/policy
+    about: Please follow the security policy for vulnerability reports.
+  - name: Swift Package Index
+    url: https://swiftpackageindex.com/KoichiroKAMADA/Yashima
+    about: Package metadata and hosted documentation live on Swift Package Index.

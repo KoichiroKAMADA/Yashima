@@ -3,6 +3,27 @@
 This file tracks the implemented public surface for the first public release
 line. Keep it small and review it before adding new symbols.
 
+## Pre-1.0 Review Notes
+
+The 2026-07-06 public API review found no must-fix breaking change before a
+1.0.0 tag. The current surface is coherent for a local generated-artifact cache:
+`YCache` is the root type, codecs own representation identity, `CacheKey` owns
+logical artifact identity, and lifecycle/cancellation behavior is explicit in
+`YCache.Options`.
+
+Before tagging 1.0.0, re-run the public symbol graph review and confirm:
+
+- `CacheKey.stableIdentifier` remains documented as key-only and not as a stored
+  entry identifier.
+- `CacheKey.namespace` remains documented as a logical partition inside one
+  cache, not as a separate storage or concurrency boundary.
+- Image APIs remain explicit PNG/JPEG APIs; no implicit `image(for:)` overload
+  is added without a separate design review.
+- Optional generation continues to avoid storing `nil`, thrown failures, or
+  cancelled producer results.
+- README installation snippets, AI-agent prompts, and the changelog all point at
+  the release line being tagged.
+
 ## Core Types
 
 - `YCache`
