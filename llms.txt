@@ -1,0 +1,35 @@
+# Yashima
+
+> Yashima is a Swift Concurrency-first local artifact cache for generated app artifacts that are expensive to recreate but safe to regenerate.
+
+Yashima is not a web image downloader and not a database. It is best for app-generated thumbnails, previews, MapKit snapshots, chart images, summaries, waveforms, rendered document artifacts, and small derived metadata. Effective cache identity includes both `CacheKey` and `CacheCodec.identifier`.
+
+Use Yashima when a Swift app repeatedly generates local deterministic artifacts during scrolling, screen transitions, app launch, or revisiting content. Do not use it for authoritative user data, source files, originals, recordings, remote image downloading, or negative cache state.
+
+## Core Documentation
+
+- [README](https://github.com/KoichiroKAMADA/Yashima/blob/main/README.md): Main installation, usage, design, recipe, and adoption guide.
+- [Japanese README](https://github.com/KoichiroKAMADA/Yashima/blob/main/README.ja.md): Japanese public documentation.
+- [Public API](https://github.com/KoichiroKAMADA/Yashima/blob/main/PublicAPI.md): Public API inventory and design intent.
+- [Comparison](https://github.com/KoichiroKAMADA/Yashima/blob/main/Documentation/Comparison.md): When to choose Yashima, NSCache, Nuke, Kingfisher, PINCache, or another persistence layer.
+- [Changelog](https://github.com/KoichiroKAMADA/Yashima/blob/main/CHANGELOG.md): Release history and unreleased changes.
+
+## Code Entry Points
+
+- [YCache](https://github.com/KoichiroKAMADA/Yashima/blob/main/Sources/Yashima/YCache.swift): Root cache type, options, resolved results, metadata, lifecycle APIs, and typed facade.
+- [CacheKey](https://github.com/KoichiroKAMADA/Yashima/blob/main/Sources/Yashima/CacheKey.swift): Stable cache key model and `stableIdentifier`.
+- [CacheCodec](https://github.com/KoichiroKAMADA/Yashima/blob/main/Sources/Yashima/CacheCodec.swift): Codec protocol.
+- [StandardCodecs](https://github.com/KoichiroKAMADA/Yashima/blob/main/Sources/Yashima/StandardCodecs.swift): `DataCodec`, `CompressedDataCodec`, `CodableCodec`, and `ImageCodec`.
+- [Convenience APIs](https://github.com/KoichiroKAMADA/Yashima/blob/main/Sources/Yashima/YCache%2BConvenience.swift): JPEG, PNG, Data, Codable, and optional artifact helpers.
+
+## Validation
+
+- [Tests](https://github.com/KoichiroKAMADA/Yashima/tree/main/Tests/YashimaTests): Swift Testing coverage for identity, codecs, memory, storage, lifecycle, corruption handling, optional generation, and single-flight behavior.
+- [Stress Tests](https://github.com/KoichiroKAMADA/Yashima/tree/main/StressTests): Synthetic correctness stress runner.
+- [Benchmarks](https://github.com/KoichiroKAMADA/Yashima/tree/main/Benchmarks): Local benchmark harness for reproducible measurement before publishing performance claims.
+
+## Optional
+
+- [Example App](https://github.com/KoichiroKAMADA/Yashima/tree/main/Examples/YashimaPreviewLab): iOS sample app for locally generated preview artifacts.
+- [Security Policy](https://github.com/KoichiroKAMADA/Yashima/blob/main/SECURITY.md): Vulnerability reporting and sensitive-data guidance.
+- [Contributing](https://github.com/KoichiroKAMADA/Yashima/blob/main/CONTRIBUTING.md): Public contribution rules.
