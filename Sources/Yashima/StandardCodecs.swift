@@ -6,29 +6,39 @@ import UIKit
 import AppKit
 #endif
 
+/// A pass-through codec for `Data` values.
 public struct DataCodec: CacheCodec, Equatable {
+    /// The stable codec identifier for raw data entries.
     public let identifier = "data-v1"
 
+    /// Creates a data codec.
     public init() {}
 
+    /// Returns the data unchanged.
     public func encode(_ value: Data) throws -> Data {
         value
     }
 
+    /// Returns the stored data unchanged.
     public func decode(_ data: Data) throws -> Data {
         data
     }
 }
 
+/// A codec that stores `Data` compressed with LZFSE.
 public struct CompressedDataCodec: CacheCodec, CacheMemoryCostEstimating, Equatable {
+    /// The stable codec identifier for LZFSE-compressed data entries.
     public let identifier = "compressed-data-lzfse-v1"
 
+    /// Creates a compressed data codec.
     public init() {}
 
+    /// Compresses data with LZFSE before storage.
     public func encode(_ value: Data) throws -> Data {
         try (value as NSData).compressed(using: .lzfse) as Data
     }
 
+    /// Decompresses LZFSE data from storage.
     public func decode(_ data: Data) throws -> Data {
         try (data as NSData).decompressed(using: .lzfse) as Data
     }
@@ -38,15 +48,20 @@ public struct CompressedDataCodec: CacheCodec, CacheMemoryCostEstimating, Equata
     }
 }
 
+/// A codec for `Codable` generated artifacts.
 public struct CodableCodec<Value: Codable & Sendable>: CacheCodec, Equatable {
+    /// The serialization format used by this codec.
     public let format: Format
+    /// The stable codec identifier, including format and value type.
     public let identifier: String
 
+    /// Creates a Codable codec in the selected format.
     public init(format: Format = .json) {
         self.format = format
         self.identifier = Self.identifier(for: format)
     }
 
+    /// Encodes the value using the selected format.
     public func encode(_ value: Value) throws -> Data {
         switch format {
         case .json:
@@ -58,6 +73,7 @@ public struct CodableCodec<Value: Codable & Sendable>: CacheCodec, Equatable {
         }
     }
 
+    /// Decodes the value using the selected format.
     public func decode(_ data: Data) throws -> Value {
         switch format {
         case .json:
@@ -69,8 +85,11 @@ public struct CodableCodec<Value: Codable & Sendable>: CacheCodec, Equatable {
 }
 
 extension CodableCodec {
+    /// Serialization formats supported by `CodableCodec`.
     public enum Format: Sendable, Equatable {
+        /// JSON encoding.
         case json
+        /// Binary property list encoding.
         case propertyList
     }
 }
@@ -93,17 +112,23 @@ private extension CodableCodec.Format {
 }
 
 #if canImport(UIKit) || canImport(AppKit)
+/// A codec for explicit PNG and JPEG platform images.
 public struct ImageCodec: CacheCodec, CacheMemoryCostEstimating, Equatable {
     #if canImport(UIKit)
+    /// The platform image type used on UIKit platforms.
     public typealias PlatformImage = UIImage
     #elseif canImport(AppKit)
+    /// The platform image type used on AppKit platforms.
     public typealias PlatformImage = NSImage
     #endif
 
+    /// The default JPEG quality used by JPEG convenience APIs.
     public static let defaultJPEGQuality = 0.85
 
+    /// The image format used by this codec.
     public let format: Format
 
+    /// The stable codec identifier for the selected image format.
     public var identifier: String {
         switch format {
         case .png:
@@ -113,6 +138,7 @@ public struct ImageCodec: CacheCodec, CacheMemoryCostEstimating, Equatable {
         }
     }
 
+    /// Creates an image codec for an explicit format.
     public init(format: Format) {
         switch format {
         case .png:
@@ -122,14 +148,17 @@ public struct ImageCodec: CacheCodec, CacheMemoryCostEstimating, Equatable {
         }
     }
 
+    /// A PNG image codec.
     public static var png: ImageCodec {
         ImageCodec(format: .png)
     }
 
+    /// Creates a JPEG image codec with normalized quality.
     public static func jpeg(quality: Double = defaultJPEGQuality) -> ImageCodec {
         ImageCodec(format: .jpeg(quality: quality))
     }
 
+    /// Encodes a platform image as PNG or JPEG bytes.
     public func encode(_ value: Value) throws -> Data {
         switch format {
         case .png:
@@ -139,6 +168,7 @@ public struct ImageCodec: CacheCodec, CacheMemoryCostEstimating, Equatable {
         }
     }
 
+    /// Decodes PNG or JPEG bytes into a platform image wrapper.
     public func decode(_ data: Data) throws -> Value {
         #if canImport(UIKit)
         guard let image = UIImage(data: data) else {
@@ -163,21 +193,30 @@ public struct ImageCodec: CacheCodec, CacheMemoryCostEstimating, Equatable {
 }
 
 extension ImageCodec {
+    /// A Sendable wrapper around the platform image type.
     public struct Value: @unchecked Sendable {
+        /// The wrapped platform image.
         public let image: PlatformImage
 
+        /// Creates an image value wrapper.
         public init(_ image: PlatformImage) {
             self.image = image
         }
     }
 
+    /// Image storage formats supported by `ImageCodec`.
     public enum Format: Sendable, Equatable {
+        /// PNG storage.
         case png
+        /// JPEG storage with normalized quality.
         case jpeg(quality: Double)
     }
 
+    /// Image codec failures.
     public enum Error: Swift.Error, Sendable, Equatable {
+        /// The platform image could not be encoded.
         case encodingFailed(format: String)
+        /// Stored bytes could not be decoded as an image.
         case decodingFailed(format: String)
     }
 }

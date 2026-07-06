@@ -295,36 +295,57 @@ struct CacheCoreOptions: Sendable, Equatable {
     static let `default` = CacheCoreOptions()
 }
 
+/// Controls how a cache lookup treats existing entries.
 public enum CacheLookupPolicy: Sendable, Equatable {
+    /// Use cached values when present; generate on miss.
     case normal
+    /// Return only an existing cached value and do not run the generator.
     case cacheOnly
+    /// Skip existing cached values and regenerate the artifact.
     case refresh
 }
 
+/// Controls where generated or stored values are written.
 public enum CacheWritePolicy: Sendable, Equatable {
+    /// Write to memory and storage.
     case memoryAndStorage
+    /// Write only to memory.
     case memoryOnly
+    /// Do not write generated values.
     case disabled
 }
 
+/// Controls how recoverable cache read failures are handled.
 public enum CacheReadFailurePolicy: Sendable, Equatable {
+    /// Surface recoverable read failures to the caller.
     case throwError
+    /// Treat recoverable read failures as cache misses.
     case treatAsMiss
 }
 
+/// Controls how cache write failures are handled.
 public enum CacheWriteFailurePolicy: Sendable, Equatable {
+    /// Surface write failures to the caller.
     case throwError
+    /// Return generated values when storage writes fail but memory writes work.
     case bestEffort
 }
 
+/// Controls sharing and cancellation of concurrent miss generation.
 public enum CacheSingleFlightPolicy: Sendable, Hashable {
+    /// Share one producer among concurrent waiters.
     case share
+    /// Share one producer, but cancel it when all waiters disappear.
     case cancelWhenNoWaiters
+    /// Do not share miss generation between callers.
     case disabled
 }
 
+/// Describes the memory cost of a cached value.
 public enum CacheCost: Sendable, Equatable {
+    /// A cost measured in bytes.
     case bytes(Int)
+    /// A caller-defined unit cost.
     case units(Int)
 }
 

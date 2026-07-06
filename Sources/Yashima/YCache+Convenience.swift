@@ -1,6 +1,7 @@
 import Foundation
 
 extension YCache {
+    /// Returns cached `Data` or generates and stores it with `DataCodec`.
     public func data(
         for key: CacheKey,
         options: Options = .default,
@@ -14,6 +15,7 @@ extension YCache {
         )
     }
 
+    /// Returns a cached `Codable` value or generates and stores it.
     public func codable<Value: Codable & Sendable>(
         for key: CacheKey,
         format: CodableCodec<Value>.Format = .json,
@@ -31,6 +33,7 @@ extension YCache {
 
 #if canImport(UIKit) || canImport(AppKit)
 extension YCache {
+    /// Returns a cached JPEG platform image or generates and stores it.
     public func jpeg(
         for key: CacheKey,
         quality: Double = ImageCodec.defaultJPEGQuality,
@@ -48,6 +51,7 @@ extension YCache {
         return value.image
     }
 
+    /// Returns an optional cached JPEG platform image without storing `nil`.
     public func optionalJPEG(
         for key: CacheKey,
         quality: Double = ImageCodec.defaultJPEGQuality,
@@ -68,6 +72,7 @@ extension YCache {
         return value?.image
     }
 
+    /// Returns a cached PNG platform image or generates and stores it.
     public func png(
         for key: CacheKey,
         options: Options = .default,
@@ -84,6 +89,7 @@ extension YCache {
         return value.image
     }
 
+    /// Returns an optional cached PNG platform image without storing `nil`.
     public func optionalPNG(
         for key: CacheKey,
         options: Options = .default,

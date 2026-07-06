@@ -17,11 +17,18 @@ and Yashima uses semantic Git tags for releases.
   compiling against the shipped API.
 - Public API inventory notes for direct `ImageCodec` usage, including
   `ImageCodec.Value` and JPEG quality normalization.
+- English and Japanese FAQ pages for adoption and support questions.
+- GitHub issue forms that route reproducible bugs and documentation corrections
+  toward public-safe reports.
 
 ### Changed
 
 - Production-use copy now marks the Mugen Clock download count as
   maintainer-reported rather than independently verified.
+- README and `llms.txt` now link to Swift Package Index, FAQ, and GitHub
+  Discussions.
+- Public API documentation now records the pre-1.0 review status and adds DocC
+  comments across the current public symbol surface.
 
 ## [0.5.0] - 2026-06-29
 

@@ -1,0 +1,37 @@
+name: Documentation issue
+description: Report unclear, incomplete, or incorrect public documentation.
+title: "[Docs]: "
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for concrete documentation problems. For adoption questions or design discussion, please use GitHub Discussions.
+  - type: input
+    id: page
+    attributes:
+      label: Page or section
+      placeholder: "README.md, README.ja.md, Documentation/FAQ.md, DocC page, etc."
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is unclear or incorrect?
+      description: Quote only the minimum needed text, then explain the issue.
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested correction
+      description: If you have a wording suggestion, include it here.
+    validations:
+      required: false
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Public-safety checklist
+      options:
+        - label: I did not include secrets, local absolute paths, private logs, or real user data.
+          required: true
