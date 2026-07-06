@@ -72,11 +72,14 @@ dependencies: [
 
 ## ドキュメントとガイド
 
+- [Swift Package Index](https://swiftpackageindex.com/KoichiroKAMADA/Yashima): パッケージページ。SPI のビルド結果がそろうと、ホストされたドキュメントもここから辿れます。
 - [PublicAPI.md](PublicAPI.md): 公開 API の一覧と設計意図。
-- [DocC catalog](Sources/Yashima/Yashima.docc): Swift Package Index 登録後にホストされる API ドキュメントのソース。
+- [DocC catalog](Sources/Yashima/Yashima.docc): Swift Package Index のドキュメントホスティングに使うソース。
 - [Comparison](Documentation/Comparison.md): Yashima を選ぶべき場合と、隣接する道具を選ぶべき場合の比較。
+- [FAQ](Documentation/FAQ.ja.md): 導入判断と質問先をすばやく確認するためのFAQ。
 - [CHANGELOG.md](CHANGELOG.md): リリース履歴。
 - [Benchmarks](Benchmarks): 再現可能なローカル測定用ハーネス。
+- [GitHub Discussions](https://github.com/KoichiroKAMADA/Yashima/discussions): 導入相談、適合性の確認、設計に関する質問。
 
 ## AI コーディングエージェントに適合性を調べてもらう
 

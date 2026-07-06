@@ -8,10 +8,12 @@ Use Yashima when a Swift app repeatedly generates local deterministic artifacts 
 
 ## Core Documentation
 
+- [Swift Package Index](https://swiftpackageindex.com/KoichiroKAMADA/Yashima): Package discovery page and hosted documentation once SPI build results are available.
 - [README](https://github.com/KoichiroKAMADA/Yashima/blob/main/README.md): Main installation, usage, design, recipe, and adoption guide.
 - [Japanese README](https://github.com/KoichiroKAMADA/Yashima/blob/main/README.ja.md): Japanese public documentation.
 - [Public API](https://github.com/KoichiroKAMADA/Yashima/blob/main/PublicAPI.md): Public API inventory and design intent.
 - [Comparison](https://github.com/KoichiroKAMADA/Yashima/blob/main/Documentation/Comparison.md): When to choose Yashima, NSCache, Nuke, Kingfisher, PINCache, or another persistence layer.
+- [FAQ](https://github.com/KoichiroKAMADA/Yashima/blob/main/Documentation/FAQ.md): Quick answers for adoption, cache identity, UI lifecycle cancellation, and support channels.
 - [Changelog](https://github.com/KoichiroKAMADA/Yashima/blob/main/CHANGELOG.md): Release history and unreleased changes.
 
 ## Code Entry Points
@@ -31,5 +33,6 @@ Use Yashima when a Swift app repeatedly generates local deterministic artifacts 
 ## Optional
 
 - [Example App](https://github.com/KoichiroKAMADA/Yashima/tree/main/Examples/YashimaPreviewLab): iOS sample app for locally generated preview artifacts.
+- [GitHub Discussions](https://github.com/KoichiroKAMADA/Yashima/discussions): Q&A for adoption questions, fit checks, and design discussion.
 - [Security Policy](https://github.com/KoichiroKAMADA/Yashima/blob/main/SECURITY.md): Vulnerability reporting and sensitive-data guidance.
 - [Contributing](https://github.com/KoichiroKAMADA/Yashima/blob/main/CONTRIBUTING.md): Public contribution rules.
