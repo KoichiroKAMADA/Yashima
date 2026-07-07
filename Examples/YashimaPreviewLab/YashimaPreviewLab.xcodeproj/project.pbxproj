@@ -15,6 +15,9 @@
 		010000000000000000000006 /* Yashima in Frameworks */ = {isa = PBXBuildFile; productRef = 010000000000000000000601 /* Yashima */; };
 		010000000000000000000007 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 010000000000000000000106 /* Assets.xcassets */; };
 		010000000000000000000008 /* GoshikidaiToYashimaRoute.csv in Resources */ = {isa = PBXBuildFile; fileRef = 010000000000000000000107 /* GoshikidaiToYashimaRoute.csv */; };
+		010000000000000000000009 /* PreviewBenchmarkScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 010000000000000000000108 /* PreviewBenchmarkScreen.swift */; };
+		01000000000000000000000A /* ScrollingThumbnailsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 010000000000000000000109 /* ScrollingThumbnailsScreen.swift */; };
+		01000000000000000000000B /* TextArtifactsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01000000000000000000010A /* TextArtifactsScreen.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -25,6 +28,9 @@
 		010000000000000000000105 /* ArtifactGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtifactGenerator.swift; sourceTree = "<group>"; };
 		010000000000000000000106 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		010000000000000000000107 /* GoshikidaiToYashimaRoute.csv */ = {isa = PBXFileReference; lastKnownFileType = text; path = GoshikidaiToYashimaRoute.csv; sourceTree = "<group>"; };
+		010000000000000000000108 /* PreviewBenchmarkScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewBenchmarkScreen.swift; sourceTree = "<group>"; };
+		010000000000000000000109 /* ScrollingThumbnailsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollingThumbnailsScreen.swift; sourceTree = "<group>"; };
+		01000000000000000000010A /* TextArtifactsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextArtifactsScreen.swift; sourceTree = "<group>"; };
 		010000000000000000000201 /* YashimaPreviewLab.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = YashimaPreviewLab.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -54,6 +60,9 @@
 			children = (
 				010000000000000000000101 /* YashimaPreviewLabApp.swift */,
 				010000000000000000000102 /* ContentView.swift */,
+				010000000000000000000108 /* PreviewBenchmarkScreen.swift */,
+				010000000000000000000109 /* ScrollingThumbnailsScreen.swift */,
+				01000000000000000000010A /* TextArtifactsScreen.swift */,
 				010000000000000000000103 /* CacheDemoViewModel.swift */,
 				010000000000000000000104 /* ArtifactRecipe.swift */,
 				010000000000000000000105 /* ArtifactGenerator.swift */,
@@ -159,6 +168,9 @@
 				010000000000000000000003 /* CacheDemoViewModel.swift in Sources */,
 				010000000000000000000004 /* ArtifactRecipe.swift in Sources */,
 				010000000000000000000005 /* ArtifactGenerator.swift in Sources */,
+				010000000000000000000009 /* PreviewBenchmarkScreen.swift in Sources */,
+				01000000000000000000000A /* ScrollingThumbnailsScreen.swift in Sources */,
+				01000000000000000000000B /* TextArtifactsScreen.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
