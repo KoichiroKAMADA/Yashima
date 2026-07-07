@@ -11,6 +11,11 @@ Open:
 Examples/YashimaPreviewLab/YashimaPreviewLab.xcodeproj
 ```
 
-The sample generates MapKit snapshots, Swift Charts snapshots, and SwiftUI
-ticket-style manifests, stores them with Yashima, and benchmarks generation,
-memory hits, and storage hits.
+The sample includes:
+
+- A benchmark for MapKit snapshots, Swift Charts snapshots, and SwiftUI
+  ticket-style manifests.
+- A scrolling thumbnail grid that uses `.task(id:)` with
+  `YCache.Options.uiLifecycle`.
+- A text-artifact screen that stores generated `Codable` metadata and
+  compressed text-like payloads.
