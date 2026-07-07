@@ -1,17 +1,18 @@
 # Public API
 
-This file tracks the implemented public surface for the first public release
+This file tracks the implemented public surface for the stable 1.x release
 line. Keep it small and review it before adding new symbols.
 
-## Pre-1.0 Review Notes
+## 1.0 API Stability Notes
 
-The 2026-07-06 public API review found no must-fix breaking change before a
-1.0.0 tag. The current surface is coherent for a local generated-artifact cache:
-`YCache` is the root type, codecs own representation identity, `CacheKey` owns
-logical artifact identity, and lifecycle/cancellation behavior is explicit in
-`YCache.Options`.
+The 2026-07-06 public API review found no must-fix breaking change before the
+1.0.0 release line. The current surface is coherent for a local generated
+artifact cache: `YCache` is the root type, codecs own representation identity,
+`CacheKey` owns logical artifact identity, and lifecycle/cancellation behavior
+is explicit in `YCache.Options`.
 
-Before tagging 1.0.0, re-run the public symbol graph review and confirm:
+Before tagging each public release, re-run the public symbol graph review and
+confirm:
 
 - `CacheKey.stableIdentifier` remains documented as key-only and not as a stored
   entry identifier.

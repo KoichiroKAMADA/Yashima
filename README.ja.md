@@ -50,13 +50,13 @@ Yashima は、用途を意図的に狭くしています。アプリが再生成
 
 Yashima は Swift Package として配布されます。Xcode では File > Add Package Dependencies からこのリポジトリを追加します。
 
-`Package.swift` で指定する場合、Yashima が 1.0 に到達するまでは `0.5.x` 系を使います。
+`Package.swift` で指定する場合、安定版の 1.x 系を使います。
 
 ```swift
 dependencies: [
     .package(
         url: "https://github.com/KoichiroKAMADA/Yashima.git",
-        .upToNextMinor(from: "0.5.0")
+        .upToNextMajor(from: "1.0.0")
     ),
 ]
 ```
@@ -106,7 +106,7 @@ https://github.com/KoichiroKAMADA/Yashima
 3. どのような CacheKey と Codec を使うべきか。
 4. Yashima でキャッシュすべきでないものは何か。
 5. 主なリスク。古い cache key、プライバシーに関わるデータ、ディスク使用量、キャンセル挙動を確認してください。
-6. バージョン 0.5.0 を前提にした、最小限の Swift Package Manager 導入案。
+6. バージョン 1.0.0 を前提にした、最小限の Swift Package Manager 導入案。
 
 まだ依存関係の追加やコード編集は行わず、期待できる効果、リスク、最小の安全な導入計画を先に説明してください。
 ```

@@ -67,13 +67,13 @@ with adjacent cache and image-loading libraries.
 Yashima is distributed as a Swift Package. In Xcode, add this repository from
 File > Add Package Dependencies.
 
-For `Package.swift`, use the `0.5.x` release line while Yashima is pre-1.0:
+For `Package.swift`, use the stable 1.x release line:
 
 ```swift
 dependencies: [
     .package(
         url: "https://github.com/KoichiroKAMADA/Yashima.git",
-        .upToNextMinor(from: "0.5.0")
+        .upToNextMajor(from: "1.0.0")
     ),
 ]
 ```
@@ -137,7 +137,7 @@ Report:
 3. What cache keys and codecs should be used.
 4. What should not be cached with Yashima.
 5. The main risks: stale cache keys, privacy-sensitive data, disk usage, and cancellation behavior.
-6. A minimal Swift Package Manager integration plan using version 0.5.0.
+6. A minimal Swift Package Manager integration plan using version 1.0.0.
 
 Do not add the dependency or edit code yet. First explain the expected benefit,
 risks, and smallest safe integration plan.

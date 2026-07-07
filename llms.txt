@@ -16,6 +16,7 @@ Use Yashima when a Swift app repeatedly generates local deterministic artifacts 
 - [Recipes](https://github.com/KoichiroKAMADA/Yashima/blob/main/Documentation/Recipes.md): Practical cache patterns for thumbnails, metadata, rendered document payloads, search artifacts, and variant previews.
 - [FAQ](https://github.com/KoichiroKAMADA/Yashima/blob/main/Documentation/FAQ.md): Quick answers for adoption, cache identity, UI lifecycle cancellation, and support channels.
 - [Changelog](https://github.com/KoichiroKAMADA/Yashima/blob/main/CHANGELOG.md): Release history and unreleased changes.
+- [1.0.0 Release Notes](https://github.com/KoichiroKAMADA/Yashima/blob/main/Documentation/ReleaseNotes/1.0.0.md): First stable API release highlights and install snippet.
 
 ## Code Entry Points
 
