@@ -103,4 +103,5 @@ questions. Use
 reproducible failures, and concrete documentation corrections.
 
 For a deeper comparison with adjacent libraries, see
-[Comparison](Comparison.md).
+[Comparison](Comparison.md). For implementation patterns, see
+[Recipes](Recipes.md).

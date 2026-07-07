@@ -71,3 +71,4 @@ throw された error や、キャンセルされた producer の結果も保存
 バグ、再現可能な失敗、具体的なドキュメント修正は [GitHub Issues](https://github.com/KoichiroKAMADA/Yashima/issues) が適しています。
 
 隣接ライブラリとの詳しい比較は [Comparison](Comparison.md) を参照してください。
+実装パターンは [Recipes](Recipes.ja.md) にまとめています。
