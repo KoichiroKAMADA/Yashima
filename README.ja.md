@@ -77,6 +77,7 @@ dependencies: [
 - [DocC catalog](Sources/Yashima/Yashima.docc): Swift Package Index のドキュメントホスティングに使うソース。
 - [Comparison](Documentation/Comparison.md): Yashima を選ぶべき場合と、隣接する道具を選ぶべき場合の比較。
 - [Recipes](Documentation/Recipes.ja.md): サムネイル、メタデータ、レンダリング済みドキュメント、検索用アーティファクト、派生プレビューの実用パターン。
+- [Adoption Measurement](Documentation/AdoptionMeasurement.ja.md): Yashima によってアプリ内の重複したローカル生成がどれだけ減ったかを測るためのガイド。
 - [FAQ](Documentation/FAQ.ja.md): 導入判断と質問先をすばやく確認するためのFAQ。
 - [CHANGELOG.md](CHANGELOG.md): リリース履歴。
 - [Benchmarks](Benchmarks): 再現可能なローカル測定用ハーネス。
@@ -417,13 +418,16 @@ stress runner はベンチマーク結果を主張するためのものではあ
 
 ## ベンチマークハーネス
 
-[`Benchmarks`](Benchmarks) には、小さなローカルベンチマークハーネスがあります。これは正しさを検証する stress runner とは別のもので、性能主張を公開する前に再現可能な測定を行うための入口です。
+[`Benchmarks`](Benchmarks) には、小さなローカルベンチマークハーネスがあります。
+これは正しさを検証する stress runner とは別のもので、数値を引用する前にローカル測定を再現しやすくするための入口です。
 
 ```sh
-swift run --package-path Benchmarks YashimaBenchmarks --iterations 200
+swift run -c release --package-path Benchmarks YashimaBenchmarks --iterations 200
 ```
 
-ベンチマーク値は、ハードウェア、OS バージョン、ストレージ状態、payload の形に強く左右されます。ローカル出力は測定材料であり、普遍的な性能主張として扱わないでください。
+ベンチマーク値は、ハードウェア、OS バージョン、ストレージ状態、payload の形、generator work に強く左右されます。
+ローカル出力は測定材料であり、普遍的な性能主張として扱わないでください。
+アプリ側の導入前後を測る場合は [Adoption Measurement](Documentation/AdoptionMeasurement.ja.md) を参照してください。
 
 ## 採用アプリ
 

@@ -7,6 +7,21 @@ and Yashima uses semantic Git tags for releases.
 
 ## [Unreleased]
 
+### Added
+
+- English and Japanese announcement kits with launch gates, pitch copy, claim
+  boundaries, quantitative-summary templates, and comment-reply seeds.
+- English and Japanese adoption-measurement guides for app-side before/after
+  counters, cache-source reporting, and future package-performance review
+  questions.
+
+### Changed
+
+- Benchmark harness now prints reproducibility environment details and frames
+  measurements around repeated local generation avoided by Yashima.
+- Bug report form now uses the stable `1.0.0` release line in its version
+  placeholder.
+
 ## [1.0.0] - 2026-07-07
 
 ### Added

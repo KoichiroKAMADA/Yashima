@@ -71,6 +71,17 @@ entry, or concurrent startup paths.
 The default policy shares work. `YCache.Options.uiLifecycle` can also cancel the
 producer when every UI waiter disappears.
 
+## How should I measure whether Yashima helped?
+
+Measure repeated local generation before and after adoption. Count how often the
+producer runs for the same logical artifact, then check memory hits, storage
+hits, and shared in-flight work after Yashima is introduced.
+
+The most useful result is often "this thumbnail was generated once instead of
+many times," not a claim that Yashima is faster than another cache tool.
+
+See [Adoption Measurement](AdoptionMeasurement.md) for a practical checklist.
+
 ## When should I use `YCache.Options.uiLifecycle`?
 
 Use `.uiLifecycle` for work whose value exists only while the current UI caller
