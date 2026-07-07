@@ -48,6 +48,16 @@ CacheKey + CacheCodec.identifier
 
 既定の policy は生成を共有します。`YCache.Options.uiLifecycle` を使うと、すべての UI waiter がいなくなった時点で producer をキャンセルできます。
 
+## Yashima の効果はどう測ればよいですか？
+
+導入前後で、重複していたローカル生成を測ります。
+同じ論理アーティファクトに対して producer が何回走ったかを数え、導入後に memory hit、storage hit、in-flight work の共有が出ているかを確認します。
+
+役に立つ結果は、「この thumbnail が何度も生成されず、1 回だけ生成されるようになった」という形で表せることがあります。
+これは、Yashima が別の cache tool より速いという主張ではありません。
+
+実務的な確認手順は [Adoption Measurement](AdoptionMeasurement.ja.md) にまとめています。
+
 ## `YCache.Options.uiLifecycle` はいつ使いますか？
 
 SwiftUI の `List` セル、`LazyVGrid` のタイル、`.task(id:)` で駆動するプレビューなど、現在の UI caller が関心を失ったら生成完了にも意味がなくなる処理に使います。

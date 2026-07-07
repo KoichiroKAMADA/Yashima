@@ -99,6 +99,8 @@ artifacts:
   choose adjacent tools.
 - [Recipes](Documentation/Recipes.md): practical cache patterns for thumbnails,
   metadata, rendered documents, search artifacts, and variant previews.
+- [Adoption Measurement](Documentation/AdoptionMeasurement.md): how to measure
+  repeated local generation avoided by Yashima in an app.
 - [FAQ](Documentation/FAQ.md): quick answers for adoption and support questions.
 - [CHANGELOG.md](CHANGELOG.md): release history.
 - [Benchmarks](Benchmarks): reproducible local measurement harness.
@@ -559,15 +561,17 @@ regeneration.
 ## Benchmark Harness
 
 Yashima includes a small local benchmark harness in [`Benchmarks`](Benchmarks).
-It is separate from the correctness stress runner and exists to make performance
-claims reproducible before they are published:
+It is separate from the correctness stress runner and exists to make local
+measurement repeatable before any numbers are quoted:
 
 ```sh
-swift run --package-path Benchmarks YashimaBenchmarks --iterations 200
+swift run -c release --package-path Benchmarks YashimaBenchmarks --iterations 200
 ```
 
-Benchmark numbers depend heavily on hardware, OS version, storage state, and
-payload shape. Treat local output as measurement input, not a universal claim.
+Benchmark numbers depend heavily on hardware, OS version, storage state,
+payload shape, and generator work. Treat local output as measurement input, not
+a universal claim. For app-side before/after measurement, see
+[Adoption Measurement](Documentation/AdoptionMeasurement.md).
 
 ## Used in App Store Apps
 

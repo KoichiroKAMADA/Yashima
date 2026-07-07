@@ -14,9 +14,11 @@ Use Yashima when a Swift app repeatedly generates local deterministic artifacts 
 - [Public API](https://github.com/KoichiroKAMADA/Yashima/blob/main/PublicAPI.md): Public API inventory and design intent.
 - [Comparison](https://github.com/KoichiroKAMADA/Yashima/blob/main/Documentation/Comparison.md): When to choose Yashima, NSCache, Nuke, Kingfisher, PINCache, or another persistence layer.
 - [Recipes](https://github.com/KoichiroKAMADA/Yashima/blob/main/Documentation/Recipes.md): Practical cache patterns for thumbnails, metadata, rendered document payloads, search artifacts, and variant previews.
+- [Adoption Measurement](https://github.com/KoichiroKAMADA/Yashima/blob/main/Documentation/AdoptionMeasurement.md): How to measure repeated local generation avoided by Yashima in an app.
 - [FAQ](https://github.com/KoichiroKAMADA/Yashima/blob/main/Documentation/FAQ.md): Quick answers for adoption, cache identity, UI lifecycle cancellation, and support channels.
 - [Changelog](https://github.com/KoichiroKAMADA/Yashima/blob/main/CHANGELOG.md): Release history and unreleased changes.
 - [1.0.0 Release Notes](https://github.com/KoichiroKAMADA/Yashima/blob/main/Documentation/ReleaseNotes/1.0.0.md): First stable API release highlights and install snippet.
+- [Announcement Kit](https://github.com/KoichiroKAMADA/Yashima/blob/main/Documentation/AnnouncementKit.md): Public-safe pitch copy, claim boundaries, quantitative-summary template, and comment-reply seeds.
 
 ## Code Entry Points
 
@@ -30,7 +32,7 @@ Use Yashima when a Swift app repeatedly generates local deterministic artifacts 
 
 - [Tests](https://github.com/KoichiroKAMADA/Yashima/tree/main/Tests/YashimaTests): Swift Testing coverage for identity, codecs, memory, storage, lifecycle, corruption handling, optional generation, and single-flight behavior.
 - [Stress Tests](https://github.com/KoichiroKAMADA/Yashima/tree/main/StressTests): Synthetic correctness stress runner.
-- [Benchmarks](https://github.com/KoichiroKAMADA/Yashima/tree/main/Benchmarks): Local benchmark harness for reproducible measurement before publishing performance claims.
+- [Benchmarks](https://github.com/KoichiroKAMADA/Yashima/tree/main/Benchmarks): Local benchmark harness for repeatable measurement of synthetic local generation and cache reuse.
 
 ## Optional
 
