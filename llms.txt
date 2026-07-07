@@ -13,6 +13,7 @@ Use Yashima when a Swift app repeatedly generates local deterministic artifacts 
 - [Japanese README](https://github.com/KoichiroKAMADA/Yashima/blob/main/README.ja.md): Japanese public documentation.
 - [Public API](https://github.com/KoichiroKAMADA/Yashima/blob/main/PublicAPI.md): Public API inventory and design intent.
 - [Comparison](https://github.com/KoichiroKAMADA/Yashima/blob/main/Documentation/Comparison.md): When to choose Yashima, NSCache, Nuke, Kingfisher, PINCache, or another persistence layer.
+- [Recipes](https://github.com/KoichiroKAMADA/Yashima/blob/main/Documentation/Recipes.md): Practical cache patterns for thumbnails, metadata, rendered document payloads, search artifacts, and variant previews.
 - [FAQ](https://github.com/KoichiroKAMADA/Yashima/blob/main/Documentation/FAQ.md): Quick answers for adoption, cache identity, UI lifecycle cancellation, and support channels.
 - [Changelog](https://github.com/KoichiroKAMADA/Yashima/blob/main/CHANGELOG.md): Release history and unreleased changes.
 

@@ -76,6 +76,7 @@ dependencies: [
 - [PublicAPI.md](PublicAPI.md): 公開 API の一覧と設計意図。
 - [DocC catalog](Sources/Yashima/Yashima.docc): Swift Package Index のドキュメントホスティングに使うソース。
 - [Comparison](Documentation/Comparison.md): Yashima を選ぶべき場合と、隣接する道具を選ぶべき場合の比較。
+- [Recipes](Documentation/Recipes.ja.md): サムネイル、メタデータ、レンダリング済みドキュメント、検索用アーティファクト、派生プレビューの実用パターン。
 - [FAQ](Documentation/FAQ.ja.md): 導入判断と質問先をすばやく確認するためのFAQ。
 - [CHANGELOG.md](CHANGELOG.md): リリース履歴。
 - [Benchmarks](Benchmarks): 再現可能なローカル測定用ハーネス。

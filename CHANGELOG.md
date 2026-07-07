@@ -18,6 +18,8 @@ and Yashima uses semantic Git tags for releases.
 - Public API inventory notes for direct `ImageCodec` usage, including
   `ImageCodec.Value` and JPEG quality normalization.
 - English and Japanese FAQ pages for adoption and support questions.
+- English and Japanese practical recipe pages for thumbnails, metadata,
+  rendered documents, search artifacts, and variant previews.
 - GitHub issue forms that route reproducible bugs and documentation corrections
   toward public-safe reports.
 

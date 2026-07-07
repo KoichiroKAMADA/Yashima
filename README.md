@@ -97,6 +97,8 @@ artifacts:
   Swift Package Index hosting.
 - [Comparison](Documentation/Comparison.md): when to choose Yashima and when to
   choose adjacent tools.
+- [Recipes](Documentation/Recipes.md): practical cache patterns for thumbnails,
+  metadata, rendered documents, search artifacts, and variant previews.
 - [FAQ](Documentation/FAQ.md): quick answers for adoption and support questions.
 - [CHANGELOG.md](CHANGELOG.md): release history.
 - [Benchmarks](Benchmarks): reproducible local measurement harness.
