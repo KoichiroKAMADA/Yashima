@@ -7,6 +7,8 @@ and Yashima uses semantic Git tags for releases.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-07-07
+
 ### Added
 
 - DocC documentation catalog for Swift Package Index hosted documentation.
@@ -25,11 +27,13 @@ and Yashima uses semantic Git tags for releases.
 
 ### Changed
 
+- README installation and AI-agent planning examples now point at the stable
+  `1.0.0` release line.
 - Production-use copy now marks the Mugen Clock download count as
   maintainer-reported rather than independently verified.
 - README and `llms.txt` now link to Swift Package Index, FAQ, and GitHub
   Discussions.
-- Public API documentation now records the pre-1.0 review status and adds DocC
+- Public API documentation now records the 1.0 API stability review and adds DocC
   comments across the current public symbol surface.
 
 ## [0.5.0] - 2026-06-29
@@ -104,7 +108,8 @@ and Yashima uses semantic Git tags for releases.
   storage store, public `YCache` API, tests, CI, MIT license, and initial public
   documentation.
 
-[Unreleased]: https://github.com/KoichiroKAMADA/Yashima/compare/0.5.0...HEAD
+[Unreleased]: https://github.com/KoichiroKAMADA/Yashima/compare/1.0.0...HEAD
+[1.0.0]: https://github.com/KoichiroKAMADA/Yashima/compare/0.5.0...1.0.0
 [0.5.0]: https://github.com/KoichiroKAMADA/Yashima/releases/tag/0.5.0
 [0.4.0]: https://github.com/KoichiroKAMADA/Yashima/releases/tag/0.4.0
 [0.3.0]: https://github.com/KoichiroKAMADA/Yashima/releases/tag/0.3.0
