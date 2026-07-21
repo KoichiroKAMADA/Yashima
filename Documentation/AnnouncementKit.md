@@ -10,10 +10,19 @@ after a release, Swift Package Index refresh, or documentation update.
 Before major outreach, confirm that:
 
 - the latest GitHub Release is public;
-- Swift Package Index shows the latest release and real compatibility results;
-- README badges do not show `pending`;
+- CI passes for the release or current default-branch commit being promoted;
+- installation examples, requirements, and public links match the current
+  release;
 - benchmark numbers were generated from the current `Benchmarks` command on the
   environment being quoted.
+
+Swift Package Index compatibility results are useful supporting evidence, but
+they are not a launch gate. Once real results appear, use the measured Swift
+versions badge and link directly to the hosted DocC documentation. Keep the
+declared support range from `Package.swift` authoritative: a successful SPI
+build for an additional destination is useful evidence, but does not by itself
+expand Yashima's supported platforms. If results return to `pending`, omit the
+compatibility badge and do not claim SPI verification.
 
 ## One-Paragraph Pitch
 
@@ -43,6 +52,9 @@ Safe to say:
 - Yashima is not a URL image downloader and not a database.
 - The repository includes DocC source, examples, recipes, a comparison guide,
   adoption measurement guidance, FAQ, and a local benchmark harness.
+- Swift Package Index publishes measured Swift compatibility and hosts the
+  versioned DocC documentation. State only the versions shown by the current
+  badge, and keep iOS 16+ and macOS 13+ as the declared platform range.
 - The maintainer reports using Yashima across shipped App Store apps. Treat
   app-level usage and download numbers as maintainer-reported unless a public
   source is cited next to the claim.
@@ -103,8 +115,18 @@ rebuild the same policy.
 - GitHub: https://github.com/KoichiroKAMADA/Yashima
 - Release: https://github.com/KoichiroKAMADA/Yashima/releases
 - Swift Package Index: https://swiftpackageindex.com/KoichiroKAMADA/Yashima
+- Hosted DocC: https://swiftpackageindex.com/KoichiroKAMADA/Yashima/1.0.0/documentation/yashima
+- Build Results: https://swiftpackageindex.com/KoichiroKAMADA/Yashima/builds
 - Discussions: https://github.com/KoichiroKAMADA/Yashima/discussions
 - Recipes: https://github.com/KoichiroKAMADA/Yashima/blob/main/Documentation/Recipes.md
 - Adoption Measurement: https://github.com/KoichiroKAMADA/Yashima/blob/main/Documentation/AdoptionMeasurement.md
 - FAQ: https://github.com/KoichiroKAMADA/Yashima/blob/main/Documentation/FAQ.md
 - Benchmarks: https://github.com/KoichiroKAMADA/Yashima/tree/main/Benchmarks
+
+## Outreach Media
+
+- `Documentation/Assets/yashima-hero.jpg`: repository and link-preview image.
+- `Documentation/Assets/tracer-yashima-scroll.mp4`: short H.264 demonstration
+  of Yashima-backed artifact reuse in Tracer using synthetic demo data.
+- `Documentation/Assets/tracer-yashima-scroll.gif`: README version of the same
+  demonstration.

@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://github.com/KoichiroKAMADA/Yashima/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/KoichiroKAMADA/Yashima/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/KoichiroKAMADA/Yashima/releases"><img alt="Release" src="https://img.shields.io/github/v/release/KoichiroKAMADA/Yashima?sort=semver"></a>
-  <img alt="Swift 6.1+" src="https://img.shields.io/badge/Swift-6.1%2B-F05138?logo=swift&logoColor=white">
+  <a href="https://swiftpackageindex.com/KoichiroKAMADA/Yashima/builds"><img alt="Swift Package Index Swift compatibility" src="https://img.shields.io/endpoint?url=https://swiftpackageindex.com/api/packages/KoichiroKAMADA/Yashima/badge?type%3Dswift-versions"></a>
   <img alt="iOS 16+ | macOS 13+" src="https://img.shields.io/badge/platform-iOS%2016%2B%20%7C%20macOS%2013%2B-lightgrey">
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/github/license/KoichiroKAMADA/Yashima"></a>
 </p>
@@ -90,8 +90,10 @@ artifacts:
 
 ## Docs and Guides
 
+- [Hosted DocC](https://swiftpackageindex.com/KoichiroKAMADA/Yashima/1.0.0/documentation/yashima):
+  versioned API documentation built and hosted by Swift Package Index.
 - [Swift Package Index](https://swiftpackageindex.com/KoichiroKAMADA/Yashima):
-  package page and hosted documentation once SPI build results are available.
+  package discovery page and measured build compatibility.
 - [PublicAPI.md](PublicAPI.md): public API inventory and design intent.
 - [DocC catalog](Sources/Yashima/Yashima.docc): documentation source used by
   Swift Package Index hosting.

@@ -8,7 +8,8 @@ Use Yashima when a Swift app repeatedly generates local deterministic artifacts 
 
 ## Core Documentation
 
-- [Swift Package Index](https://swiftpackageindex.com/KoichiroKAMADA/Yashima): Package discovery page and hosted documentation once SPI build results are available.
+- [Hosted DocC](https://swiftpackageindex.com/KoichiroKAMADA/Yashima/1.0.0/documentation/yashima): Versioned API documentation built and hosted by Swift Package Index.
+- [Swift Package Index](https://swiftpackageindex.com/KoichiroKAMADA/Yashima): Package discovery page and measured build compatibility.
 - [README](https://github.com/KoichiroKAMADA/Yashima/blob/main/README.md): Main installation, usage, design, recipe, and adoption guide.
 - [Japanese README](https://github.com/KoichiroKAMADA/Yashima/blob/main/README.ja.md): Japanese public documentation.
 - [Public API](https://github.com/KoichiroKAMADA/Yashima/blob/main/PublicAPI.md): Public API inventory and design intent.
